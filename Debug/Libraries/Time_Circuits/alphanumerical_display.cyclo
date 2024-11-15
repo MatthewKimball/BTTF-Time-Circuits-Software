@@ -1,0 +1,4 @@
+../Libraries/Time_Circuits/alphanumerical_display.c:21:25:alpha_display_init	1
+../Libraries/Time_Circuits/alphanumerical_display.c:35:24:clearDisplay	3
+../Libraries/Time_Circuits/alphanumerical_display.c:73:24:digitDisplay	2
+../Libraries/Time_Circuits/alphanumerical_display.c:106:24:alphaDisplay	1

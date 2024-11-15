@@ -1,0 +1,14 @@
+../Libraries/Time_Circuits/timecircuit_control.c:28:31:timeCircuit_control_init	1
+../Libraries/Time_Circuits/timecircuit_control.c:45:30:timeCircuit_control_clearDisplays	1
+../Libraries/Time_Circuits/timecircuit_control.c:56:30:timeCircuit_control_setDefaultDateTimes	1
+../Libraries/Time_Circuits/timecircuit_control.c:67:30:timeCircuit_control_updateDisplays	1
+../Libraries/Time_Circuits/timecircuit_control.c:78:30:timeCircuit_control_checkButtonActivation	3
+../Libraries/Time_Circuits/timecircuit_control.c:99:30:timeCircuit_control_readInputDateTime	4
+../Libraries/Time_Circuits/timecircuit_control.c:126:30:timeCircuit_control_getRtcDateTime	1
+../Libraries/Time_Circuits/timecircuit_control.c:137:30:timeCircuit_control_setRtcDateTime	1
+../Libraries/Time_Circuits/timecircuit_control.c:154:30:timeCircuit_control_setDefaultDisplays	1
+../Libraries/Time_Circuits/timecircuit_control.c:169:30:timeCircuit_control_updatePresentDateTime	2
+../Libraries/Time_Circuits/timecircuit_control.c:192:30:timeCircuit_control_updateTimeTravelDateTimes	3
+../Libraries/Time_Circuits/timecircuit_control.c:228:30:timeCircuit_control_updateDestinationDateTime	4
+../Libraries/Time_Circuits/timecircuit_control.c:265:30:timeCircuit_control_updateGlitch	2
+../Libraries/Time_Circuits/timecircuit_control.c:286:30:timeCircuit_control_update	1
