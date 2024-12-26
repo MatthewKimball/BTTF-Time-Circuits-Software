@@ -89,8 +89,8 @@ typedef struct
   uint8_t regAddrs : 4;
 } Ht16k33_DisplayData_t;
 
-typedef struct Ht16k33_Config_Tag Ht16k33_Config_t;
-typedef bool Ht16k33_Status_t;
+typedef struct  Ht16k33_Config_Tag Ht16k33_Config_t;
+typedef bool    Ht16k33_Status_t;
 
 Ht16k33_Config_t* ht16k33_init(I2C_HandleTypeDef* const hi2c, const uint8_t addrs);
 

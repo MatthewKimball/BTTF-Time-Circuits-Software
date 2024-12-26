@@ -5,18 +5,21 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
-../Libraries/Time_Circuits/alphanumerical_display.c \
 ../Libraries/Time_Circuits/datetime_display.c \
+../Libraries/Time_Circuits/sound_effects.c \
+../Libraries/Time_Circuits/storagedevice_control.c \
 ../Libraries/Time_Circuits/timecircuit_control.c 
 
 OBJS += \
-./Libraries/Time_Circuits/alphanumerical_display.o \
 ./Libraries/Time_Circuits/datetime_display.o \
+./Libraries/Time_Circuits/sound_effects.o \
+./Libraries/Time_Circuits/storagedevice_control.o \
 ./Libraries/Time_Circuits/timecircuit_control.o 
 
 C_DEPS += \
-./Libraries/Time_Circuits/alphanumerical_display.d \
 ./Libraries/Time_Circuits/datetime_display.d \
+./Libraries/Time_Circuits/sound_effects.d \
+./Libraries/Time_Circuits/storagedevice_control.d \
 ./Libraries/Time_Circuits/timecircuit_control.d 
 
 
@@ -27,7 +30,7 @@ Libraries/Time_Circuits/%.o Libraries/Time_Circuits/%.su Libraries/Time_Circuits
 clean: clean-Libraries-2f-Time_Circuits
 
 clean-Libraries-2f-Time_Circuits:
-	-$(RM) ./Libraries/Time_Circuits/alphanumerical_display.cyclo ./Libraries/Time_Circuits/alphanumerical_display.d ./Libraries/Time_Circuits/alphanumerical_display.o ./Libraries/Time_Circuits/alphanumerical_display.su ./Libraries/Time_Circuits/datetime_display.cyclo ./Libraries/Time_Circuits/datetime_display.d ./Libraries/Time_Circuits/datetime_display.o ./Libraries/Time_Circuits/datetime_display.su ./Libraries/Time_Circuits/timecircuit_control.cyclo ./Libraries/Time_Circuits/timecircuit_control.d ./Libraries/Time_Circuits/timecircuit_control.o ./Libraries/Time_Circuits/timecircuit_control.su
+	-$(RM) ./Libraries/Time_Circuits/datetime_display.cyclo ./Libraries/Time_Circuits/datetime_display.d ./Libraries/Time_Circuits/datetime_display.o ./Libraries/Time_Circuits/datetime_display.su ./Libraries/Time_Circuits/sound_effects.cyclo ./Libraries/Time_Circuits/sound_effects.d ./Libraries/Time_Circuits/sound_effects.o ./Libraries/Time_Circuits/sound_effects.su ./Libraries/Time_Circuits/storagedevice_control.cyclo ./Libraries/Time_Circuits/storagedevice_control.d ./Libraries/Time_Circuits/storagedevice_control.o ./Libraries/Time_Circuits/storagedevice_control.su ./Libraries/Time_Circuits/timecircuit_control.cyclo ./Libraries/Time_Circuits/timecircuit_control.d ./Libraries/Time_Circuits/timecircuit_control.o ./Libraries/Time_Circuits/timecircuit_control.su
 
 .PHONY: clean-Libraries-2f-Time_Circuits
 

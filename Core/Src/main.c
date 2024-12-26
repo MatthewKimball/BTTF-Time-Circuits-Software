@@ -21,6 +21,7 @@
 #include "main.h"
 #include "adc.h"
 #include "can.h"
+#include "dma.h"
 #include "fatfs.h"
 #include "i2c.h"
 #include "i2s.h"
@@ -37,7 +38,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+#include <math.h>
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -64,6 +65,7 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
 
 /* USER CODE END 0 */
 
@@ -97,6 +99,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_CAN1_Init();
   MX_I2C1_Init();
   MX_I2C2_Init();
@@ -104,17 +107,15 @@ int main(void)
   MX_I2C3_Init();
   MX_USART1_UART_Init();
   MX_ADC1_Init();
-  MX_USART2_UART_Init();
   MX_FATFS_Init();
   MX_RTC_Init();
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
-  TimeCircuit_Control_Config_t* ptimeCircuitControl  = timeCircuit_control_init(&hi2c3, &hrtc);
-  timeCircuit_control_setDefaultDisplays(ptimeCircuitControl);
 
-  FATFS FatFs;
-  FIL Fil;
-  FRESULT FR_Status;
+
+  TimeCircuit_Control_Config_t* ptimeCircuitControl  = timeCircuit_control_init(&hi2c3, &hrtc, &hspi1, &hi2s2);
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -132,6 +133,8 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
   }
+  timeCircuit_control_deInit(ptimeCircuitControl);
+
   /* USER CODE END 3 */
 }
 
@@ -177,7 +180,7 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)

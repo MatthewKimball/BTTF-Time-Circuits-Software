@@ -40,7 +40,10 @@ Libraries/Time_Circuits/timecircuit_control.o: \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_spi.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
  C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/ht16k33/ht16k33.h \
- C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/keypad3x4w/keypad3x4w.h
+ C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/keypad3x4w/keypad3x4w.h \
+ C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/storagedevice_control.h \
+ ../Libraries/Time_Circuits/sound_effects.h \
+ C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/storagedevice_control.h
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/timecircuit_control.h:
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/datetime_display.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
@@ -82,3 +85,6 @@ C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/ht16k33/ht16k33.h:
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/keypad3x4w/keypad3x4w.h:
+C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/storagedevice_control.h:
+../Libraries/Time_Circuits/sound_effects.h:
+C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/storagedevice_control.h:

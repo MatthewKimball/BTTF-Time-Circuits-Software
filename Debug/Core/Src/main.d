@@ -36,7 +36,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rtc_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_spi.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Core/Inc/adc.h ../Core/Inc/main.h ../Core/Inc/can.h \
+ ../Core/Inc/adc.h ../Core/Inc/main.h ../Core/Inc/can.h ../Core/Inc/dma.h \
  ../FATFS/App/fatfs.h ../Middlewares/Third_Party/FatFs/src/ff.h \
  ../Middlewares/Third_Party/FatFs/src/integer.h ../FATFS/Target/ffconf.h \
  ../Middlewares/Third_Party/FatFs/src/ff_gen_drv.h \
@@ -47,7 +47,8 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/timecircuit_control.h \
  C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/datetime_display.h \
  C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/ht16k33/ht16k33.h \
- C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/keypad3x4w/keypad3x4w.h
+ C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/keypad3x4w/keypad3x4w.h \
+ C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/storagedevice_control.h
 ../Core/Inc/main.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
 ../Core/Inc/stm32f4xx_hal_conf.h:
@@ -89,6 +90,7 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Inc/adc.h:
 ../Core/Inc/main.h:
 ../Core/Inc/can.h:
+../Core/Inc/dma.h:
 ../FATFS/App/fatfs.h:
 ../Middlewares/Third_Party/FatFs/src/ff.h:
 ../Middlewares/Third_Party/FatFs/src/integer.h:
@@ -107,3 +109,4 @@ C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/datetime_display.h:
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/ht16k33/ht16k33.h:
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/keypad3x4w/keypad3x4w.h:
+C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/storagedevice_control.h:

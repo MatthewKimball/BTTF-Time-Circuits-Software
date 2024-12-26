@@ -40,7 +40,7 @@ typedef struct
 
 }Keypad3x4w_PinConfig_t;
 
-Keypad3x4w_Config_t * keypad3x4w_init(Keypad3x4w_PinConfig_t * pPinConfig);
+Keypad3x4w_Config_t * keypad3x4w_init(const Keypad3x4w_PinConfig_t * const pPinConfig);
 Keypad3x4w_Status_t keypad3x4w_readKeypad(Keypad3x4w_Config_t * pConfig, uint8_t * pKey);
 
 //Column scan order

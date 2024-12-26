@@ -27,6 +27,7 @@ Core/Startup \
 Drivers/STM32F4xx_HAL_Driver/Src \
 FATFS/App \
 FATFS/Target \
+Libraries/Peripherals/bno055 \
 Libraries/Peripherals/ht16k33 \
 Libraries/Peripherals/keypad3x4w \
 Libraries/Time_Circuits \

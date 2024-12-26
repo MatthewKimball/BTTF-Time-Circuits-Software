@@ -14,6 +14,7 @@ RM := rm -rf
 -include Libraries/Time_Circuits/subdir.mk
 -include Libraries/Peripherals/keypad3x4w/subdir.mk
 -include Libraries/Peripherals/ht16k33/subdir.mk
+-include Libraries/Peripherals/bno055/subdir.mk
 -include FATFS/Target/subdir.mk
 -include FATFS/App/subdir.mk
 -include Drivers/STM32F4xx_HAL_Driver/Src/subdir.mk

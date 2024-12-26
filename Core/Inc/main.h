@@ -54,6 +54,9 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+#define SD_SPI_HANDLE   hspi1
+#define SD_CS_GPIO_Port GPIOC
+#define SD_CS_Pin       GPIO_PIN_5
 
 /* USER CODE END EFP */
 
@@ -70,6 +73,8 @@ void Error_Handler(void);
 #define CAN_ID_SWITCH_4_GPIO_Port GPIOA
 #define KEYPAD_ROW_2_Pin GPIO_PIN_1
 #define KEYPAD_ROW_2_GPIO_Port GPIOA
+#define WHITE_LED_Pin GPIO_PIN_3
+#define WHITE_LED_GPIO_Port GPIOA
 #define KEYPAD_COL_3_Pin GPIO_PIN_4
 #define KEYPAD_COL_3_GPIO_Port GPIOA
 #define KEYPAD_ROW_3_Pin GPIO_PIN_4
@@ -80,6 +85,8 @@ void Error_Handler(void);
 #define SD_CD_GPIO_Port GPIOB
 #define KEYPAD_ENTER_Pin GPIO_PIN_1
 #define KEYPAD_ENTER_GPIO_Port GPIOB
+#define SD_MODE_Pin GPIO_PIN_14
+#define SD_MODE_GPIO_Port GPIOB
 #define CAN_ID_SWITCH_1_Pin GPIO_PIN_6
 #define CAN_ID_SWITCH_1_GPIO_Port GPIOC
 #define CAN_ID_SWITCH_2_Pin GPIO_PIN_7
@@ -105,8 +112,6 @@ void Error_Handler(void);
 #define IMU_SCL_GPIO_Port GPIOB
 #define IMU_SDA_Pin GPIO_PIN_7
 #define IMU_SDA_GPIO_Port GPIOB
-#define WHITE_LED_Pin GPIO_PIN_8
-#define WHITE_LED_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 

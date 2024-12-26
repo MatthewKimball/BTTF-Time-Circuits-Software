@@ -9,13 +9,13 @@
 
 struct Keypad3x4w_Config_Tag
 {
-  Keypad3x4w_PinConfig_t * pkeypadPinConfig;
-  uint8_t * pActivatedKey;
+  const Keypad3x4w_PinConfig_t* pkeypadPinConfig;
+  uint8_t*                      pActivatedKey;
 
 } Keypad3x4w_Config;
 
 
-Keypad3x4w_Config_t * keypad3x4w_init(Keypad3x4w_PinConfig_t * const pPinConfig)
+Keypad3x4w_Config_t * keypad3x4w_init(const Keypad3x4w_PinConfig_t * const pPinConfig)
 {
   Keypad3x4w_Config_t * pConfig = malloc(sizeof(Keypad3x4w_Config_t));
 
