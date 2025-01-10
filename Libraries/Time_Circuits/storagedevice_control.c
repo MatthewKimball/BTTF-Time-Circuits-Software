@@ -11,7 +11,7 @@
 
 struct StorageDevice_Config_Tag
 {
-  StorageDevice_Config_t * pStorageDeviceConfig;
+  //StorageDevice_Config_t * pStorageDeviceConfig;
   SPI_HandleTypeDef * hspi;
 
   FATFS   FatFs;  //Fatfs handle

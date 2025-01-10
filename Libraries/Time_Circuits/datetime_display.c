@@ -114,6 +114,8 @@ DateTime_Display_Config_t * dateTime_display_init(I2C_HandleTypeDef* const hi2c,
   pConfig->hi2c = hi2c;
   pConfig->hDisplayDriver = ht16k33_init(hi2c, addrs);
 
+  dateTime_clearDisplay(pConfig);
+
   ht16k33_setSystemSetup(pConfig->hDisplayDriver, Ht16k33_SystemOscillator_On);
   ht16k33_setDisplaySetup(pConfig->hDisplayDriver, Ht16k33_DisplayStatus_On, Ht16k33_BlinkingFrequency_Off);
 

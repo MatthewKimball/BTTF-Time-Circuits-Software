@@ -25,7 +25,7 @@ CallBack_Result_t gCallbackResult = UNKNOWN;
 uint32_t gFileReadSize            = 0;
 uint32_t gRecordingSize           = 0;
 uint32_t gPlayedSize              = 0;
-uint16_t gSamples[8000];
+uint16_t gSamples[1000];
 
 SoundEffects_Config_t * soundEffects_init(I2S_HandleTypeDef* hi2s, GPIO_TypeDef* const pGpioPort, const uint16_t* const pGpioPin)
 {
@@ -49,18 +49,30 @@ SoundEffects_Status_t soundEffects_initPlaySound(SoundEffects_Config_t* pSoundEf
     StorageDevice_Config_t* pStorageDeviceConfig)
 {
 
-  storageDevice_readWavDataSize(pStorageDeviceConfig, "enter_v1.wav", &gRecordingSize, &gFileReadSize);
-  storageDevice_readFileData(pStorageDeviceConfig, gSamples, 16000, &gFileReadSize);
+  storageDevice_readWavDataSize(pStorageDeviceConfig, "enter.wav", &gRecordingSize, &gFileReadSize);
 
   return 1;
 }
 
 SoundEffects_Status_t soundEffects_playSound(SoundEffects_Config_t* pSoundEffectConfig,
-    StorageDevice_Config_t* pStorageDeviceConfig)
+    StorageDevice_Config_t* pStorageDeviceConfig, const char* const filename)
 {
-  gPlayedSize              = 0;
-  HAL_I2S_Transmit_DMA(pSoundEffectConfig->hi2s,(uint16_t *) gSamples, 8000);
 
+  if (gPlayedSize < gRecordingSize)
+  {
+    HAL_I2S_DMAStop(pSoundEffectConfig->hi2s);
+    storageDevice_closeFile(pStorageDeviceConfig);
+  }
+
+  gFileReadSize            = 0;
+  gRecordingSize           = 0;
+  gPlayedSize              = 0;
+
+  storageDevice_readWavDataSize(pStorageDeviceConfig, filename, &gRecordingSize, &gFileReadSize);
+  storageDevice_readFileData(pStorageDeviceConfig, gSamples, 2000, &gFileReadSize);
+  HAL_I2S_Transmit_DMA(pSoundEffectConfig->hi2s,(uint16_t *) gSamples, 1000);
+  //soundEffects_update(pSoundEffectConfig, pStorageDeviceConfig);
+  //storageDevice_closeFile(pStorageDeviceConfig);
 
   return 1;
 }
@@ -68,34 +80,31 @@ SoundEffects_Status_t soundEffects_playSound(SoundEffects_Config_t* pSoundEffect
 SoundEffects_Status_t soundEffects_update(SoundEffects_Config_t* pSoundEffectConfig,
     StorageDevice_Config_t * pStorageDeviceConfig)
 {
-
-  while(gPlayedSize < gRecordingSize)
+  if (gPlayedSize >= gRecordingSize)
   {
-
-    if(gCallbackResult == HALF_COMPLETED)
-    {
-      storageDevice_readFileData(pStorageDeviceConfig, gSamples, 8000, &gFileReadSize);
-
-      gCallbackResult = UNKNOWN;
-    }
-
-    if(gCallbackResult == FULL_COMPLETED)
-    {
-      storageDevice_readFileData(pStorageDeviceConfig, &gSamples[4000], 8000, &gFileReadSize);
-
-      gCallbackResult = UNKNOWN;
-    }
-
-    if(gPlayedSize >= gRecordingSize)
-    {
-      HAL_I2S_DMAStop(pSoundEffectConfig->hi2s);
-    }
+    HAL_I2S_DMAStop(pSoundEffectConfig->hi2s);
+    storageDevice_closeFile(pStorageDeviceConfig);
   }
 
+  if(gCallbackResult == HALF_COMPLETED)
+  {
 
+    storageDevice_readFileData(pStorageDeviceConfig, gSamples, 1000, &gFileReadSize);
+
+    gCallbackResult = UNKNOWN;
+  }
+
+  if(gCallbackResult == FULL_COMPLETED)
+  {
+    storageDevice_readFileData(pStorageDeviceConfig, &gSamples[500], 1000, &gFileReadSize);
+
+    gCallbackResult = UNKNOWN;
+  }
 
 return 1;
 }
+
+
 
 void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
 {
@@ -105,5 +114,6 @@ void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
 void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
 {
   gCallbackResult =   FULL_COMPLETED;
-  gPlayedSize     +=  8000;
+  gPlayedSize     +=  1000;
+
 }

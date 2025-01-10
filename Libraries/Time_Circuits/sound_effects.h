@@ -32,7 +32,7 @@ SoundEffects_Config_t* soundEffects_init(I2S_HandleTypeDef* hi2s, GPIO_TypeDef* 
 SoundEffects_Status_t soundEffects_update(SoundEffects_Config_t* pSoundEffectConfig,
     StorageDevice_Config_t* pStorageDeviceConfig);
 SoundEffects_Status_t soundEffects_playSound(SoundEffects_Config_t* pSoundEffectConfig,
-    StorageDevice_Config_t* pStorageDeviceConfig);
+    StorageDevice_Config_t* pStorageDeviceConfig, const char* const filename);
 SoundEffects_Status_t soundEffects_initPlaySound(SoundEffects_Config_t* pSoundEffectConfig,
     StorageDevice_Config_t* pStorageDeviceConfig);
 

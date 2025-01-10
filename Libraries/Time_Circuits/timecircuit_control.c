@@ -99,6 +99,8 @@ struct TimeCircuit_Control_Config_Tag
 
 } TimeCircuit_Control_Config;
 
+TimeCircuit_Control_Status_t timeCircuit_control_clearDisplays(TimeCircuit_Control_Config_t* const pConfig);
+
 TimeCircuit_Control_Config_t* timeCircuit_control_init(I2C_HandleTypeDef* const hi2c, RTC_HandleTypeDef* hrtc,
     SPI_HandleTypeDef* hspi, I2S_HandleTypeDef* hi2s)
 {
@@ -113,11 +115,17 @@ TimeCircuit_Control_Config_t* timeCircuit_control_init(I2C_HandleTypeDef* const 
   pConfig->pPresentTime      = dateTime_display_init(hi2c, PRESENT_DISPLAY_I2C_ADDRESS);
   pConfig->pLastDepartedTime = dateTime_display_init(hi2c, DEPARTED_DISPLAY_I2C_ADDRESS);
 
+  //Initialise SD Card
+  pConfig->pStorageDeviceConfig = storageDevice_init(hspi);
+
+  //Initialise Sound Effects
+  pConfig->pSoundEffectConfig = soundEffects_init(hi2s, MUTE_SWITCH_GPIO_PORT, MUTE_SWITCH_PIN);
+
   //Initialise the time circuit keypad
   pConfig->pTimeCircuitKeypad = keypad3x4w_init(gKeypadPinConfig);
 
-  //Initialise SD Card
-  pConfig->pStorageDeviceConfig = storageDevice_init(hspi);
+  //Play TC Start Up Sound
+  soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "enter.wav");
 
   //Set displays to last stored values or defaults
   timeCircuit_control_updateStartUpDateTimes(pConfig);
@@ -128,9 +136,7 @@ TimeCircuit_Control_Config_t* timeCircuit_control_init(I2C_HandleTypeDef* const 
   //Update RTC with retrieved present date time
   timeCircuit_control_setRtcDateTime(pConfig);
 
-  //Initialise Sound Effects
-  pConfig->pSoundEffectConfig = soundEffects_init(hi2s, MUTE_SWITCH_GPIO_PORT, MUTE_SWITCH_PIN);
-  soundEffects_initPlaySound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig);
+
 
   return pConfig;
 }
@@ -212,6 +218,41 @@ TimeCircuit_Control_Status_t timeCircuit_control_readInputDateTime(TimeCircuit_C
   {
     pConfig->keypadInput[pConfig->keypadInputCount] = pConfig->keypadInputValue;
     pConfig->keypadInputCount++;
+
+    switch(pConfig->keypadInputValue)
+    {
+      case 0:
+        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-0.wav");
+        break;
+      case 1:
+        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-1.wav");
+        break;
+      case 2:
+        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-2.wav");
+        break;
+      case 3:
+        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-3.wav");
+        break;
+      case 4:
+        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-4.wav");
+        break;
+      case 5:
+        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-5.wav");
+        break;
+      case 6:
+        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-6.wav");
+        break;
+      case 7:
+        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-7.wav");
+        break;
+      case 8:
+        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-8.wav");
+        break;
+      case 9:
+        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-9.wav");
+        break;
+
+    }
   }
 
   if (pConfig->keypadInputCount >= 12)
@@ -272,7 +313,7 @@ TimeCircuit_Control_Status_t timeCircuit_control_saveDateTimes(TimeCircuit_Contr
 
 TimeCircuit_Control_Status_t timeCircuit_control_updateStartUpDateTimes(TimeCircuit_Control_Config_t * const pConfig)
 {
-  TimeCircuit_Control_Status_t isSuccess = true;
+  TimeCircuit_Control_Status_t isSuccess = false;
 
   //char* pReadBuf = malloc(MAXIMUM_DATETIME_INPUT_CHARS * 3);
   char pReadBuf[(MAXIMUM_DATETIME_INPUT_CHARS * 3) + 1];
@@ -374,8 +415,8 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateTimeTravelDateTimes(TimeC
       isSuccess &= timeCircuit_control_clearDisplays(pConfig);
 
       //Play Sound
-      soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig);
-      //HAL_Delay(700);
+      soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "enter.wav");
+
 
       //Copy last time departed time data to present time
       isSuccess &= dateTime_copyDateTime(pConfig->pLastDepartedTime, pConfig->pPresentTime);
@@ -421,10 +462,7 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateDestinationDateTime(TimeC
       if (dateTime_setDisplayData(pConfig->pDestinationTime,pConfig->keypadInput))
       {
         //Play sound
-
-        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig);
-        isSuccess &= soundEffects_update(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig);
-        soundEffects_initPlaySound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig);
+        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "enter.wav");
 
         isSuccess &= dateTime_updateDisplay(pConfig->pDestinationTime);
       }
@@ -504,6 +542,33 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateGlitch(TimeCircuit_Contro
   return isSuccess;
 }
 
+TimeCircuit_Control_Status_t timeCircuit__toggleTimeColon(TimeCircuit_Control_Config_t* const pConfig)
+{
+  static uint8_t toogleStatus = 0;
+  static uint32_t previousTime = 0;
+  DateTime_Display_Status_t isSuccess   = 0;
+
+  if ((HAL_GetTick()-previousTime) >= COLON_TIME_DELAY_MS)
+  {
+    toogleStatus = ((toogleStatus) == 0) ? 3 : 0;
+    previousTime = HAL_GetTick();
+    isSuccess |= dateTime_setLed(pConfig->pDestinationTime,   COLON_LED_SEGMENT_ADDRESS, (toogleStatus<<6));
+    isSuccess |= dateTime_setLed(pConfig->pLastDepartedTime,  COLON_LED_SEGMENT_ADDRESS, (toogleStatus<<6));
+    isSuccess |= dateTime_setLed(pConfig->pPresentTime,       COLON_LED_SEGMENT_ADDRESS, (toogleStatus<<6));
+
+//    if (toogleStatus == 3)
+//    {
+//      soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "beep.wav");
+//     // HAL_Delay(500);
+//    }
+
+  }
+
+  return isSuccess;
+}
+
+
+
 TimeCircuit_Control_Status_t timeCircuit_control_update(TimeCircuit_Control_Config_t * const pConfig)
 {
   TimeCircuit_Control_Status_t isSuccess = 1;
@@ -518,7 +583,8 @@ TimeCircuit_Control_Status_t timeCircuit_control_update(TimeCircuit_Control_Conf
   isSuccess &= timeCircuit_control_updateDestinationDateTime(pConfig);
 
   //Update time circuit displays colons
-  isSuccess &= dateTime_toggleTimeColon(pConfig->pDestinationTime, pConfig->pPresentTime, pConfig->pLastDepartedTime);
+  isSuccess &= timeCircuit__toggleTimeColon(pConfig);
+  //isSuccess &= dateTime_toggleTimeColon(pConfig->pDestinationTime, pConfig->pPresentTime, pConfig->pLastDepartedTime);
 
   //Update Present Time from RTC
   isSuccess &= timeCircuit_control_updatePresentDateTime(pConfig);
@@ -527,7 +593,7 @@ TimeCircuit_Control_Status_t timeCircuit_control_update(TimeCircuit_Control_Conf
   isSuccess &= timeCircuit_control_updateGlitch(pConfig);
 
   //Update Sound Effects
-  //isSuccess &= soundEffects_update(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig);
+  isSuccess &= soundEffects_update(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig);
 
   return isSuccess;
 }

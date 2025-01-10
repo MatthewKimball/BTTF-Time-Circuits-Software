@@ -25,4 +25,5 @@ TimeCircuit_Control_Status_t  timeCircuit_control_updateDisplays(TimeCircuit_Con
 TimeCircuit_Control_Status_t  timeCircuit_control_setRtcDateTime(TimeCircuit_Control_Config_t * const pConfig);
 TimeCircuit_Control_Status_t timeCircuit_control_deInit(TimeCircuit_Control_Config_t* const pConfig);
 
+
 #endif /* TIMECIRCUIT_CONTROL_H_ */
