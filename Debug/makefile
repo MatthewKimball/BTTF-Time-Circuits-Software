@@ -9,12 +9,26 @@ RM := rm -rf
 
 # All of the sources participating in the build are defined here
 -include sources.mk
+-include Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/subdir.mk
+-include Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/subdir.mk
+-include Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/subdir.mk
+-include Middlewares/Third_Party/FreeRTOS/Source/subdir.mk
 -include Middlewares/Third_Party/FatFs/src/option/subdir.mk
 -include Middlewares/Third_Party/FatFs/src/subdir.mk
 -include Libraries/Time_Circuits/subdir.mk
 -include Libraries/Peripherals/keypad3x4w/subdir.mk
 -include Libraries/Peripherals/ht16k33/subdir.mk
+-include Libraries/Peripherals/ds3231/subdir.mk
 -include Libraries/Peripherals/bno055/subdir.mk
+-include Libraries/CanOpenSTM32/CANopenNode_STM32/subdir.mk
+-include Libraries/CanOpenSTM32/CANopenNode/storage/subdir.mk
+-include Libraries/CanOpenSTM32/CANopenNode/extra/subdir.mk
+-include Libraries/CanOpenSTM32/CANopenNode/309/subdir.mk
+-include Libraries/CanOpenSTM32/CANopenNode/305/subdir.mk
+-include Libraries/CanOpenSTM32/CANopenNode/304/subdir.mk
+-include Libraries/CanOpenSTM32/CANopenNode/303/subdir.mk
+-include Libraries/CanOpenSTM32/CANopenNode/301/subdir.mk
+-include Libraries/CanOpenSTM32/CANopenNode/subdir.mk
 -include FATFS/Target/subdir.mk
 -include FATFS/App/subdir.mk
 -include Drivers/STM32F4xx_HAL_Driver/Src/subdir.mk

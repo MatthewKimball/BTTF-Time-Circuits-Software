@@ -61,6 +61,7 @@ DateTime_Display_Status_t dateTime_convertDateTimeToChar(DateTime_Display_Config
     char* const writeBuf, uint8_t bufferSize, uint8_t* pBufferCount);
 DateTime_Display_Status_t dateTime_setLed(DateTime_Display_Config_t* const pConfig, const uint8_t segmentNumber,
        const uint8_t ledState);
+DateTime_Display_Status_t dateTime_clearDisplayExceptColons(DateTime_Display_Config_t* const pConfig);
 
 
 

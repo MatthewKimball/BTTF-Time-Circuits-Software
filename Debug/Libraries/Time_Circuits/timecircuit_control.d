@@ -38,12 +38,29 @@ Libraries/Time_Circuits/timecircuit_control.o: \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rtc.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rtc_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_spi.h \
+ ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
+ ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
  C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/ht16k33/ht16k33.h \
  C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/keypad3x4w/keypad3x4w.h \
  C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/storagedevice_control.h \
  ../Libraries/Time_Circuits/sound_effects.h \
- C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/storagedevice_control.h
+ C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/storagedevice_control.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h \
+ ../Core/Inc/FreeRTOSConfig.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/portmacro.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/mpu_wrappers.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/task.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/include/list.h \
+ ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h \
+ ../Core/Inc/gpio.h ../Core/Inc/main.h ../Libraries/Time_Circuits/imu.h \
+ C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/bno055/bno055.h \
+ C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/ds3231/ds3231_for_stm32_hal.h \
+ ../Core/Inc/main.h
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/timecircuit_control.h:
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/datetime_display.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
@@ -82,9 +99,28 @@ C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rtc.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_rtc_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_spi.h:
+../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h:
+../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/ht16k33/ht16k33.h:
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/keypad3x4w/keypad3x4w.h:
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/storagedevice_control.h:
 ../Libraries/Time_Circuits/sound_effects.h:
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/storagedevice_control.h:
+../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/FreeRTOS.h:
+../Core/Inc/FreeRTOSConfig.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/projdefs.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/portable.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/deprecated_definitions.h:
+../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/portmacro.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/mpu_wrappers.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/task.h:
+../Middlewares/Third_Party/FreeRTOS/Source/include/list.h:
+../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h:
+../Core/Inc/gpio.h:
+../Core/Inc/main.h:
+../Libraries/Time_Circuits/imu.h:
+C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/bno055/bno055.h:
+C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/ds3231/ds3231_for_stm32_hal.h:
+../Core/Inc/main.h:

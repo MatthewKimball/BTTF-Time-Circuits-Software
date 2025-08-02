@@ -19,6 +19,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 #include "adc.h"
 #include "can.h"
 #include "dma.h"
@@ -32,7 +33,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <timecircuit_control.h>
+#include "sound_effects.h"
+#include "storagedevice_control.h"
+#include "timecircuit_control.h"
 
 /* USER CODE END Includes */
 
@@ -43,6 +46,8 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define MUTE_SWITCH_PORT MUTE_SWITCH_GPIO_Port
+#define MUTE_SWITCH_PIN  MUTE_SWITCH_Pin
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -54,11 +59,15 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+// Global handles for config structs
+SoundEffects_Config_t* gSoundEffectConfig = NULL;
+StorageDevice_Config_t* gStorageConfig = NULL;
+TimeCircuit_Control_Config_t* gTimeCircuitConfig = NULL;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -84,7 +93,6 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-
   HAL_Init();
 
   /* USER CODE BEGIN Init */
@@ -113,11 +121,27 @@ int main(void)
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
 
+  gStorageConfig = storageDevice_init(&hspi1);
+  gSoundEffectConfig = soundEffects_init(&hi2s2, MUTE_SWITCH_GPIO_Port, MUTE_SWITCH_Pin);
+  gTimeCircuitConfig = timeCircuit_control_init(&hi2c3, &hi2c2, &hrtc, &hspi1, &hi2s2);
 
-  TimeCircuit_Control_Config_t* ptimeCircuitControl  = timeCircuit_control_init(&hi2c3, &hrtc, &hspi1, &hi2s2);
+  osKernelInitialize();    // Initialize kernel BEFORE creating tasks
+  MX_FREERTOS_Init();
+  osKernelStart();  // Start the scheduler
 
 
   /* USER CODE END 2 */
+
+  /* Init scheduler */
+  osKernelInitialize();
+
+  /* Call init function for freertos objects (in cmsis_os2.c) */
+  MX_FREERTOS_Init();
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -126,7 +150,7 @@ int main(void)
   while (1)
   {
 
-    timeCircuit_control_update(ptimeCircuitControl);
+    //timeCircuit_control_update(gTimeCircuitConfig);
 
 
     /* USER CODE END WHILE */
@@ -134,7 +158,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
 
   }
-  timeCircuit_control_deInit(ptimeCircuitControl);
+
 
   /* USER CODE END 3 */
 }
@@ -187,6 +211,27 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM6 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM6) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.

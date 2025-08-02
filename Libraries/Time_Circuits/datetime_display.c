@@ -277,10 +277,19 @@ DateTime_Display_Status_t dateTime_copyDateTime(DateTime_Display_Config_t* const
   return isSuccess;
 }
 
+
 DateTime_Display_Status_t dateTime_clearDisplay(DateTime_Display_Config_t* const pConfig)
 {
   uint8_t* clearBuffer = malloc (TOTAL_NUMBER_OF_ROWS);
   DateTime_Display_Status_t isSuccess   = 0;
+
+  //Save colon state
+  uint8_t ColonStateData = 0;
+  uint8_t RequestData = COLON_LED_SEGMENT_ADDRESS;
+
+  isSuccess |= HAL_I2C_Master_Transmit(pConfig->hi2c, (pConfig->i2cAddrs)<<1, &RequestData,  1, HAL_MAX_DELAY);
+  isSuccess |= HAL_I2C_Master_Receive(pConfig->hi2c, ((pConfig->i2cAddrs)<<1)|0x01, &ColonStateData, 1, HAL_MAX_DELAY);
+  ColonStateData &= 0b11000000;
 
   for (int buffCount = 0; buffCount < TOTAL_NUMBER_OF_ROWS; buffCount++)
   {
@@ -296,10 +305,19 @@ DateTime_Display_Status_t dateTime_clearDisplay(DateTime_Display_Config_t* const
         Ht16k33_BlinkingFrequency_Off);
   }
 
+  //Restore colon state
+  uint8_t SegmentData = 0;
+  isSuccess |= HAL_I2C_Master_Transmit(pConfig->hi2c, (pConfig->i2cAddrs)<<1, &RequestData,  1, HAL_MAX_DELAY);
+  isSuccess |= HAL_I2C_Master_Receive(pConfig->hi2c, ((pConfig->i2cAddrs)<<1)|0x01, &SegmentData, 1, HAL_MAX_DELAY);
+  SegmentData &= 0b00111111;
+  SegmentData |= ColonStateData;
+  isSuccess |= ht16k33_updateDisplayData (pConfig->hDisplayDriver, RequestData, &SegmentData, 1);
+
   free(clearBuffer);
 
   return isSuccess;
 }
+
 DateTime_Display_Status_t dateTime_setLed(DateTime_Display_Config_t* const pConfig, const uint8_t segmentNumber,
        const uint8_t ledState)
 {
@@ -388,6 +406,14 @@ DateTime_Display_Status_t dateTime_updateDisplayGlitch(DateTime_Display_Config_t
 
   memcpy(&digitSegBuffer, pGlitchData+3, sizeof(digitSegBuffer));
 
+  //Save colon state
+  uint8_t ColonStateData = 0;
+  uint8_t RequestData = COLON_LED_SEGMENT_ADDRESS;
+
+  isSuccess |= HAL_I2C_Master_Transmit(pConfig->hi2c, (pConfig->i2cAddrs)<<1, &RequestData,  1, HAL_MAX_DELAY);
+  isSuccess |= HAL_I2C_Master_Receive(pConfig->hi2c, ((pConfig->i2cAddrs)<<1)|0x01, &ColonStateData, 1, HAL_MAX_DELAY);
+  ColonStateData &= 0b11000000;
+
 
   //Update glitch alphanumeric display
   for (segmentCount = 0; segmentCount <= 2; segmentCount++)
@@ -403,6 +429,14 @@ DateTime_Display_Status_t dateTime_updateDisplayGlitch(DateTime_Display_Config_t
   {
     isSuccess |= dateTime_setDigitSegments(pConfig, digitSegmentOrder[segmentCount], digitSegBuffer[segmentCount]);
   }
+
+  //Restore colon state
+  uint8_t SegmentData = 0;
+  isSuccess |= HAL_I2C_Master_Transmit(pConfig->hi2c, (pConfig->i2cAddrs)<<1, &RequestData,  1, HAL_MAX_DELAY);
+  isSuccess |= HAL_I2C_Master_Receive(pConfig->hi2c, ((pConfig->i2cAddrs)<<1)|0x01, &SegmentData, 1, HAL_MAX_DELAY);
+  SegmentData &= 0b00111111;
+  SegmentData |= ColonStateData;
+  isSuccess |= ht16k33_updateDisplayData (pConfig->hDisplayDriver, RequestData, &SegmentData, 1);
 
   //Update Meridiem
   isSuccess |= dateTime_setLed(pConfig, MERIDIEM_LED_SEGMENT_ADDRESS, (DateTime_DisplayDataMeridiem_AM << 6));
@@ -445,6 +479,14 @@ DateTime_Display_Status_t dateTime_updateDisplay(DateTime_Display_Config_t* cons
   uint8_t                   segmentCount        = 0;
   char                      digitSegBuffer[11];
 
+  //Save colon state
+  uint8_t ColonStateData = 0;
+  uint8_t RequestData = COLON_LED_SEGMENT_ADDRESS;
+
+  isSuccess |= HAL_I2C_Master_Transmit(pConfig->hi2c, (pConfig->i2cAddrs)<<1, &RequestData,  1, HAL_MAX_DELAY);
+  isSuccess |= HAL_I2C_Master_Receive(pConfig->hi2c, ((pConfig->i2cAddrs)<<1)|0x01, &ColonStateData, 1, HAL_MAX_DELAY);
+  ColonStateData &= 0b11000000;
+
   //Update Month Display Characters
   for (segmentCount = 0; segmentCount <= 2; segmentCount++)
   {
@@ -465,6 +507,14 @@ DateTime_Display_Status_t dateTime_updateDisplay(DateTime_Display_Config_t* cons
   {
     isSuccess |= dateTime_setDigitSegments(pConfig, digitSegmentOrder[segmentCount], digitSegBuffer[segmentCount]);
   }
+
+  //Restore colon state
+  uint8_t SegmentData = 0;
+  isSuccess |= HAL_I2C_Master_Transmit(pConfig->hi2c, (pConfig->i2cAddrs)<<1, &RequestData,  1, HAL_MAX_DELAY);
+  isSuccess |= HAL_I2C_Master_Receive(pConfig->hi2c, ((pConfig->i2cAddrs)<<1)|0x01, &SegmentData, 1, HAL_MAX_DELAY);
+  SegmentData &= 0b00111111;
+  SegmentData |= ColonStateData;
+  isSuccess |= ht16k33_updateDisplayData (pConfig->hDisplayDriver, RequestData, &SegmentData, 1);
 
   //Update Meridiem
   isSuccess |= dateTime_setLed(pConfig, MERIDIEM_LED_SEGMENT_ADDRESS, (pConfig->dateTimeData.Meridiem << 6));

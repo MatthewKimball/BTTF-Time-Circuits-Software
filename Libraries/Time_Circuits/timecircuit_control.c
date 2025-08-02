@@ -6,6 +6,12 @@
  */
 #include <timecircuit_control.h>
 #include "sound_effects.h"
+#include "cmsis_os.h"
+#include "gpio.h"
+#include <stdint.h>
+#include "imu.h"
+#include "ds3231_for_stm32_hal.h"
+#include <stdbool.h>
 
 #define DESTINATION_DISPLAY_I2C_ADDRESS     0x71
 #define PRESENT_DISPLAY_I2C_ADDRESS         0x72
@@ -45,14 +51,20 @@
 #define AMPLIFIER_SHUTDOWN_PIN              GPIO_PIN_14
 #define AMPLIFIER_SHUTDOWN_GPIO_PORT        GPIOB
 
-#define BUTTON_DEBOUNCE_TIME_MS             100
+#define KEYPAD_DEBOUNCE_TIME_MS             50
+#define ENTER_SWITCH_DEBOUNCE_TIME_MS       50
+#define GLITCH_SWITCH_DEBOUNCE_TIME_MS      100
+#define TIME_TRAVEL_SWITCH_DEBOUNCE_TIME_MS 100
 #define PRESENT_TIME_UPDATE_TIME_MS         30000
+#define DISPLAY_DELAY_MS                    500
 
 #define MAXIMUM_DATETIME_INPUT_CHARS        12
 #define NUMBER_OF_DATETIME_DISPLAYS         3
 
 #define MAXIMUM_GLITCH_RANDOM_PERIOD_MS     60000
 
+extern osMessageQueueId_t soundQueueHandle;
+extern volatile bool gGlitchDoubleHit;
 
 const uint8_t   gDefaultDestinationTime[]     = {1,0,2,7,1,9,8,5,1,1,0,0};
 const uint8_t   gDefaultPresentTime[]         = {0,7,0,5,2,0,1,5,2,3,5,9};
@@ -77,7 +89,8 @@ const Keypad3x4w_PinConfig_t gKeypadPinConfig[] =
 
 struct TimeCircuit_Control_Config_Tag
 {
-  I2C_HandleTypeDef*          hi2c;
+  I2C_HandleTypeDef*          hi2c_display;
+  I2C_HandleTypeDef*          hi2c_rtc;
   RTC_HandleTypeDef*          hrtc;
   SPI_HandleTypeDef*          hspi;
   I2S_HandleTypeDef*          hi2s;
@@ -99,44 +112,54 @@ struct TimeCircuit_Control_Config_Tag
 
 } TimeCircuit_Control_Config;
 
-TimeCircuit_Control_Status_t timeCircuit_control_clearDisplays(TimeCircuit_Control_Config_t* const pConfig);
 
-TimeCircuit_Control_Config_t* timeCircuit_control_init(I2C_HandleTypeDef* const hi2c, RTC_HandleTypeDef* hrtc,
-    SPI_HandleTypeDef* hspi, I2S_HandleTypeDef* hi2s)
+TimeCircuit_Control_Status_t timeCircuit_control_checkButtonActivation(const bool* const isbuttonActivated,
+    bool* hasButtonActivated, uint32_t* previousTimeMS, uint32_t debounceTime);
+TimeCircuit_Control_Status_t timeCircuit_control_clearDisplays(TimeCircuit_Control_Config_t* const pConfig);
+TimeCircuit_Control_Status_t timeCircuit_control_setDefaultDateTimes(TimeCircuit_Control_Config_t* const pConfig);
+TimeCircuit_Control_Status_t timeCircuit_control_getRTCMinute(TimeCircuit_Control_Config_t * const pConfig,
+    uint8_t * currentMinutes);
+
+
+TimeCircuit_Control_Config_t* timeCircuit_control_init(I2C_HandleTypeDef* const hi2c_display, I2C_HandleTypeDef* const hi2c_rtc,
+    RTC_HandleTypeDef* hrtc, SPI_HandleTypeDef* hspi, I2S_HandleTypeDef* hi2s)
 {
   TimeCircuit_Control_Config_t* pConfig = malloc(sizeof(TimeCircuit_Control_Config_t));
-  pConfig->hi2c = hi2c;
+  pConfig->hi2c_display = hi2c_display;
+  pConfig->hi2c_rtc = hi2c_rtc;
   pConfig->hrtc = hrtc;
   pConfig->hspi = hspi;
   pConfig->hi2s = hi2s;
 
+
   //Initialise the time circuit displays
-  pConfig->pDestinationTime  = dateTime_display_init(hi2c, DESTINATION_DISPLAY_I2C_ADDRESS);
-  pConfig->pPresentTime      = dateTime_display_init(hi2c, PRESENT_DISPLAY_I2C_ADDRESS);
-  pConfig->pLastDepartedTime = dateTime_display_init(hi2c, DEPARTED_DISPLAY_I2C_ADDRESS);
+  pConfig->pDestinationTime  = dateTime_display_init(pConfig->hi2c_display, DESTINATION_DISPLAY_I2C_ADDRESS);
+  pConfig->pPresentTime      = dateTime_display_init(pConfig->hi2c_display, PRESENT_DISPLAY_I2C_ADDRESS);
+  pConfig->pLastDepartedTime = dateTime_display_init(pConfig->hi2c_display, DEPARTED_DISPLAY_I2C_ADDRESS);
 
-  //Initialise SD Card
-  pConfig->pStorageDeviceConfig = storageDevice_init(hspi);
-
-  //Initialise Sound Effects
-  pConfig->pSoundEffectConfig = soundEffects_init(hi2s, MUTE_SWITCH_GPIO_PORT, MUTE_SWITCH_PIN);
 
   //Initialise the time circuit keypad
   pConfig->pTimeCircuitKeypad = keypad3x4w_init(gKeypadPinConfig);
 
   //Play TC Start Up Sound
-  soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "enter.wav");
+//  char filename[] = "locked.wav";
+//  osMessageQueuePut(soundQueueHandle, &filename, 0, 0);
 
   //Set displays to last stored values or defaults
-  timeCircuit_control_updateStartUpDateTimes(pConfig);
+  timeCircuit_control_setDefaultDateTimes(pConfig);
 
   //Update display with retrieved date times
   timeCircuit_control_updateDisplays(pConfig);
 
-  //Update RTC with retrieved present date time
-  timeCircuit_control_setRtcDateTime(pConfig);
+  #if defined(SET_INTERNAL_RTC)
+    //Update RTC with retrieved present date time
+    timeCircuit_control_setRtcDateTime(pConfig);
 
+  #elif defined(SET_EXTERNAL_RTC)
+    //Initialise RTC
+    DS3231_Init(pConfig->hi2c_rtc);
 
+  #endif
 
   return pConfig;
 }
@@ -182,7 +205,7 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateDisplays(TimeCircuit_Cont
 }
 
 TimeCircuit_Control_Status_t timeCircuit_control_checkButtonActivation(const bool* const isbuttonActivated,
-    bool* hasButtonActivated, uint32_t* previousTimeMS)
+    bool* hasButtonActivated, uint32_t* previousTimeMS, uint32_t debounceTime)
 {
   TimeCircuit_Control_Status_t hasStateChanged = 0;
   uint32_t currentTimeMS = HAL_GetTick();
@@ -191,7 +214,7 @@ TimeCircuit_Control_Status_t timeCircuit_control_checkButtonActivation(const boo
   if (*isbuttonActivated != *hasButtonActivated)
   {
     //Filter out false positive button activations
-    if ((currentTimeMS - *previousTimeMS) > BUTTON_DEBOUNCE_TIME_MS)
+    if ((currentTimeMS - *previousTimeMS) > debounceTime)
     {
       *previousTimeMS = currentTimeMS;
       hasStateChanged = true;
@@ -210,9 +233,10 @@ TimeCircuit_Control_Status_t timeCircuit_control_readInputDateTime(TimeCircuit_C
   static bool hasButtonActivated          = false;
   static uint32_t previousTime            = 0;
 
+
   isButtonActivated  = keypad3x4w_readKeypad(pConfig->pTimeCircuitKeypad, &pConfig->keypadInputValue);
   hasButtonStateChanged = timeCircuit_control_checkButtonActivation(&isButtonActivated, &hasButtonActivated,
-        &previousTime);
+        &previousTime, KEYPAD_DEBOUNCE_TIME_MS);
 
   if ((hasButtonStateChanged == true) && (isButtonActivated == true))
   {
@@ -222,34 +246,44 @@ TimeCircuit_Control_Status_t timeCircuit_control_readInputDateTime(TimeCircuit_C
     switch(pConfig->keypadInputValue)
     {
       case 0:
-        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-0.wav");
+        char filename[] = "Dtmf-0.wav";
+        osMessageQueuePut(soundQueueHandle, &filename, 0, 0);
         break;
       case 1:
-        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-1.wav");
+        char filename1[] = "Dtmf-1.wav";
+        osMessageQueuePut(soundQueueHandle, &filename1, 0, 0);
         break;
       case 2:
-        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-2.wav");
+        char filename2[] = "Dtmf-2.wav";
+        osMessageQueuePut(soundQueueHandle, &filename2, 0, 0);
         break;
       case 3:
-        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-3.wav");
+        char filename3[] = "Dtmf-3.wav";
+        osMessageQueuePut(soundQueueHandle, &filename3, 0, 0);
         break;
       case 4:
-        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-4.wav");
+        char filename4[] = "Dtmf-4.wav";
+        osMessageQueuePut(soundQueueHandle, &filename4, 0, 0);
         break;
       case 5:
-        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-5.wav");
+        char filename5[] = "Dtmf-5.wav";
+        osMessageQueuePut(soundQueueHandle, &filename5, 0, 0);
         break;
       case 6:
-        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-6.wav");
+        char filename6[] = "Dtmf-6.wav";
+        osMessageQueuePut(soundQueueHandle, &filename6, 0, 0);
         break;
       case 7:
-        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-7.wav");
+        char filename7[] = "Dtmf-7.wav";
+        osMessageQueuePut(soundQueueHandle, &filename7, 0, 0);
         break;
       case 8:
-        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-8.wav");
+        char filename8[] = "Dtmf-8.wav";
+        osMessageQueuePut(soundQueueHandle, &filename8, 0, 0);
         break;
       case 9:
-        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "Dtmf-9.wav");
+        char filename9[] = "Dtmf-9.wav";
+        osMessageQueuePut(soundQueueHandle, &filename9, 0, 0);
         break;
 
     }
@@ -262,7 +296,7 @@ TimeCircuit_Control_Status_t timeCircuit_control_readInputDateTime(TimeCircuit_C
 
   return isSuccess;
 }
-
+#if defined(SET_INTERNAL_RTC)
 TimeCircuit_Control_Status_t timeCircuit_control_getRtcDateTime(TimeCircuit_Control_Config_t * const pConfig)
 {
   TimeCircuit_Control_Status_t isSuccess = 1;
@@ -290,6 +324,72 @@ TimeCircuit_Control_Status_t timeCircuit_control_setRtcDateTime(TimeCircuit_Cont
 
   return isSuccess;
 }
+
+TimeCircuit_Control_Status_t timeCircuit_control_getRTCMinute(TimeCircuit_Control_Config_t * const pConfig,
+    uint8_t * currentMinutes)
+{
+  TimeCircuit_Control_Status_t isSuccess = 1;
+
+  isSuccess &= HAL_RTC_GetTime(pConfig->hrtc, &pConfig->hRtcTime, RTC_FORMAT_BIN);
+  &currentMinutes = pConfig->hRtcTime.Minutes;
+
+  return isSuccess;
+}
+
+
+#elif defined(SET_EXTERNAL_RTC)
+TimeCircuit_Control_Status_t timeCircuit_control_getRtcDateTime(TimeCircuit_Control_Config_t * const pConfig)
+{
+  TimeCircuit_Control_Status_t isSuccess = 1;
+
+  //Retrieve RTC Date Time Data
+  pConfig->hRtcTime.Hours   = DS3231_GetHour();
+  pConfig->hRtcTime.Minutes = DS3231_GetMinute();
+  pConfig->hRtcTime.Seconds = DS3231_GetSecond();
+
+  pConfig->hRtcDate.Date    = DS3231_GetDate();
+  pConfig->hRtcDate.Month   = DS3231_GetMonth();
+  pConfig->hRtcDate.Year    = DS3231_GetYear();
+
+  return isSuccess;
+}
+
+TimeCircuit_Control_Status_t timeCircuit_control_setRtcDateTime(TimeCircuit_Control_Config_t * const pConfig)
+{
+  TimeCircuit_Control_Status_t isSuccess = 1;
+
+  //Retrieve default RTC date time data
+  isSuccess &= timeCircuit_control_getRtcDateTime(pConfig);
+
+  //Get present date time for RTC date time
+  isSuccess &= dateTime_getRtcDateTimeData(pConfig->pPresentTime, &pConfig->hRtcDate, &pConfig->hRtcTime);
+
+  //Set RTC with present date time data
+  DS3231_SetFullTime(pConfig->hRtcTime.Hours,
+                           pConfig->hRtcTime.Minutes,
+                           pConfig->hRtcTime.Seconds);
+
+  DS3231_SetFullDate(pConfig->hRtcDate.Date,
+                         pConfig->hRtcDate.Month,
+                         pConfig->hRtcDate.WeekDay,
+                         pConfig->hRtcDate.Year);
+
+  return isSuccess;
+}
+
+TimeCircuit_Control_Status_t timeCircuit_control_getRTCMinute(TimeCircuit_Control_Config_t * const pConfig,
+    uint8_t * currentMinutes)
+{
+  TimeCircuit_Control_Status_t isSuccess = 1;
+
+  *currentMinutes = DS3231_GetMinute();
+
+  return isSuccess;
+}
+
+#endif
+
+
 
 TimeCircuit_Control_Status_t timeCircuit_control_saveDateTimes(TimeCircuit_Control_Config_t * const pConfig)
 {
@@ -372,9 +472,11 @@ TimeCircuit_Control_Status_t timeCircuit_control_updatePresentDateTime(TimeCircu
 {
   TimeCircuit_Control_Status_t isSuccess = 1;
   static uint8_t previousMinute = 0;
-  isSuccess &= HAL_RTC_GetTime(pConfig->hrtc, &pConfig->hRtcTime, RTC_FORMAT_BIN);
+  uint8_t currentMinute = 0;
 
-  if (pConfig->hRtcTime.Minutes != previousMinute)
+  isSuccess &=  timeCircuit_control_getRTCMinute(pConfig, &currentMinute);
+
+  if (currentMinute != previousMinute)
   {
     //Retrieve RTC date time data
     isSuccess &= timeCircuit_control_getRtcDateTime(pConfig);
@@ -405,7 +507,7 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateTimeTravelDateTimes(TimeC
 
   isButtonActivated  = HAL_GPIO_ReadPin(TIME_TRAVEL_SWITCH_GPIO_PORT, TIME_TRAVEL_SWITCH_PIN);
   hasButtonStateChanged = timeCircuit_control_checkButtonActivation(&isButtonActivated, &hasButtonActivated,
-        &previousTime);
+        &previousTime, TIME_TRAVEL_SWITCH_DEBOUNCE_TIME_MS);
 
   if (hasButtonStateChanged == true)
   {
@@ -415,8 +517,11 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateTimeTravelDateTimes(TimeC
       isSuccess &= timeCircuit_control_clearDisplays(pConfig);
 
       //Play Sound
-      soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "enter.wav");
+      char filename9[] = "locked.wav";
+      osMessageQueuePut(soundQueueHandle, &filename9, 0, 0);
 
+      //Delay Display Update
+      HAL_Delay(DISPLAY_DELAY_MS);
 
       //Copy last time departed time data to present time
       isSuccess &= dateTime_copyDateTime(pConfig->pLastDepartedTime, pConfig->pPresentTime);
@@ -448,7 +553,7 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateDestinationDateTime(TimeC
 
   isButtonActivated  = !HAL_GPIO_ReadPin(KEYPAD_ENTER_SWITCH_GPIO_PORT, KEYPAD_ENTER_SWITCH_PIN);
   hasButtonStateChanged = timeCircuit_control_checkButtonActivation(&isButtonActivated, &hasButtonActivated,
-      &previousTime);
+      &previousTime, ENTER_SWITCH_DEBOUNCE_TIME_MS);
 
   if (hasButtonStateChanged == true)
   {
@@ -462,8 +567,11 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateDestinationDateTime(TimeC
       if (dateTime_setDisplayData(pConfig->pDestinationTime,pConfig->keypadInput))
       {
         //Play sound
-        soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "enter.wav");
+        char filename[] = "enter.wav";
+        osMessageQueuePut(soundQueueHandle, &filename, 0, 0);
 
+        //Delay Display Update
+        HAL_Delay(DISPLAY_DELAY_MS);
         isSuccess &= dateTime_updateDisplay(pConfig->pDestinationTime);
       }
       pConfig->keypadInputCount = 0;
@@ -497,8 +605,9 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateGlitch(TimeCircuit_Contro
 
   bIsButtonActivated  = !HAL_GPIO_ReadPin(GLITCH_SWITCH_GPIO_PORT, GLITCH_SWITCH_PIN);
   bHasButtonStateChanged = timeCircuit_control_checkButtonActivation(&bIsButtonActivated, &hasButtonActivated,
-      &previousTimeMS);
+      &previousTimeMS, GLITCH_SWITCH_DEBOUNCE_TIME_MS);
 
+  //Checks if glitch switch has been enabled
   if (bHasButtonStateChanged == true)
   {
     if (bIsButtonActivated == true )
@@ -508,17 +617,17 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateGlitch(TimeCircuit_Contro
     }
     else
     {
-      //Clear glitching display
       isSuccess &= dateTime_clearDisplay(pConfig->pDestinationTime);
-      HAL_Delay(500);
-      isSuccess &= dateTime_updateDisplayGlitch(pConfig->pDestinationTime, gGlitchDisplayChars);
-      HAL_Delay(100);
       isSuccess = dateTime_updateDisplay(pConfig->pDestinationTime);
 
+      return true;
     }
   }
 
-  if (((HAL_GetTick() - previousTime) > gGlitchTimeDelay[stateCount]) && ((HAL_GetTick() - previousFaultTime) > randomFaultTime) &&(bIsButtonActivated == true))
+  //Update display with glitch
+  if (((HAL_GetTick() - previousTime) > gGlitchTimeDelay[stateCount]) &&
+      ((HAL_GetTick() - previousFaultTime) > randomFaultTime) &&
+      (bIsButtonActivated == true) && (gGlitchDoubleHit  == false))
   {
     switch (stateCount)
     {
@@ -533,13 +642,51 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateGlitch(TimeCircuit_Contro
       case 2:
         isSuccess &= dateTime_updateDisplayGlitch(pConfig->pDestinationTime,gGlitchDisplayDate);
         stateCount = 0;
+//        char filename[] = "glitch2.wav";
+//        osMessageQueuePut(soundQueueHandle, &filename, 0, 0);
         break;
-    }
+
+      default:
+        break;
+     }
     previousTime = HAL_GetTick();
   }
 
+  // Clear glitch
+  if (gGlitchDoubleHit == true)
+  {
+    //Clear glitching display
+    isSuccess &= dateTime_clearDisplay(pConfig->pDestinationTime);
+    HAL_Delay(500);
+    isSuccess &= dateTime_updateDisplayGlitch(pConfig->pDestinationTime, gGlitchDisplayChars);
+    HAL_Delay(100);
+    isSuccess = dateTime_updateDisplay(pConfig->pDestinationTime);
+
+    //Clear glitch flag
+    gGlitchDoubleHit = false;
+
+    //Generate new random time
+    randomFaultTime = rand() % MAXIMUM_GLITCH_RANDOM_PERIOD_MS;
+
+    //Reset glitch timer
+    previousFaultTime = HAL_GetTick();
+
+
+  }
 
   return isSuccess;
+}
+
+TimeCircuit_Control_Status_t timeCircuit__setColonState(TimeCircuit_Control_Config_t* const pConfig, uint8_t colonOn)
+{
+  DateTime_Display_Status_t isSuccess   = 0;
+
+  isSuccess |= dateTime_setLed(pConfig->pDestinationTime,   COLON_LED_SEGMENT_ADDRESS, (colonOn<<6));
+  isSuccess |= dateTime_setLed(pConfig->pLastDepartedTime,  COLON_LED_SEGMENT_ADDRESS, (colonOn<<6));
+  isSuccess |= dateTime_setLed(pConfig->pPresentTime,       COLON_LED_SEGMENT_ADDRESS, (colonOn<<6));
+
+  return isSuccess;
+
 }
 
 TimeCircuit_Control_Status_t timeCircuit__toggleTimeColon(TimeCircuit_Control_Config_t* const pConfig)
@@ -556,11 +703,6 @@ TimeCircuit_Control_Status_t timeCircuit__toggleTimeColon(TimeCircuit_Control_Co
     isSuccess |= dateTime_setLed(pConfig->pLastDepartedTime,  COLON_LED_SEGMENT_ADDRESS, (toogleStatus<<6));
     isSuccess |= dateTime_setLed(pConfig->pPresentTime,       COLON_LED_SEGMENT_ADDRESS, (toogleStatus<<6));
 
-//    if (toogleStatus == 3)
-//    {
-//      soundEffects_playSound(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig, "beep.wav");
-//     // HAL_Delay(500);
-//    }
 
   }
 
@@ -582,9 +724,6 @@ TimeCircuit_Control_Status_t timeCircuit_control_update(TimeCircuit_Control_Conf
   //Update Destination Time from user input
   isSuccess &= timeCircuit_control_updateDestinationDateTime(pConfig);
 
-  //Update time circuit displays colons
-  isSuccess &= timeCircuit__toggleTimeColon(pConfig);
-  //isSuccess &= dateTime_toggleTimeColon(pConfig->pDestinationTime, pConfig->pPresentTime, pConfig->pLastDepartedTime);
 
   //Update Present Time from RTC
   isSuccess &= timeCircuit_control_updatePresentDateTime(pConfig);
@@ -592,8 +731,7 @@ TimeCircuit_Control_Status_t timeCircuit_control_update(TimeCircuit_Control_Conf
   //Update Glitch
   isSuccess &= timeCircuit_control_updateGlitch(pConfig);
 
-  //Update Sound Effects
-  isSuccess &= soundEffects_update(pConfig->pSoundEffectConfig, pConfig->pStorageDeviceConfig);
+
 
   return isSuccess;
 }

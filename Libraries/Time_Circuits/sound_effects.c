@@ -9,7 +9,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 
+extern uint32_t gPlayedSize, gRecordingSize;
+extern bool gIsPlaying;
+extern StorageDevice_Config_t* gStorageConfig;
 
 struct SoundEffects_Config_Tag
 {
@@ -27,14 +31,18 @@ uint32_t gRecordingSize           = 0;
 uint32_t gPlayedSize              = 0;
 uint16_t gSamples[1000];
 
-SoundEffects_Config_t * soundEffects_init(I2S_HandleTypeDef* hi2s, GPIO_TypeDef* const pGpioPort, const uint16_t* const pGpioPin)
+SoundEffects_Config_t* soundEffects_init(I2S_HandleTypeDef* hi2s, GPIO_TypeDef* pGpioPort, uint16_t gpioPin)
 {
   SoundEffects_Config_t* pConfig = malloc(sizeof(SoundEffects_Config_t));
   pConfig->hi2s = hi2s;
   pConfig->pMuteSwitchGpioPort = pGpioPort;
-  pConfig->pMuteSwitchGpioPin = *pGpioPin;
-
+  pConfig->pMuteSwitchGpioPin  = gpioPin;
   return pConfig;
+}
+
+void soundEffects_deinit(SoundEffects_Config_t* pSoundEffectConfig)
+{
+  free(pSoundEffectConfig);
 }
 
 SoundEffects_Status_t soundEffects_activate(SoundEffects_Config_t* pSoundEffectConfig)
@@ -58,21 +66,27 @@ SoundEffects_Status_t soundEffects_playSound(SoundEffects_Config_t* pSoundEffect
     StorageDevice_Config_t* pStorageDeviceConfig, const char* const filename)
 {
 
-  if (gPlayedSize < gRecordingSize)
-  {
-    HAL_I2S_DMAStop(pSoundEffectConfig->hi2s);
-    storageDevice_closeFile(pStorageDeviceConfig);
-  }
-
-  gFileReadSize            = 0;
-  gRecordingSize           = 0;
-  gPlayedSize              = 0;
+  gFileReadSize = 0;
+  gRecordingSize = 0;
+  gPlayedSize = 0;
 
   storageDevice_readWavDataSize(pStorageDeviceConfig, filename, &gRecordingSize, &gFileReadSize);
   storageDevice_readFileData(pStorageDeviceConfig, gSamples, 2000, &gFileReadSize);
-  HAL_I2S_Transmit_DMA(pSoundEffectConfig->hi2s,(uint16_t *) gSamples, 1000);
-  //soundEffects_update(pSoundEffectConfig, pStorageDeviceConfig);
-  //storageDevice_closeFile(pStorageDeviceConfig);
+
+  gIsPlaying = true;
+
+  uint16_t transferSize = (gRecordingSize < 1000) ? gRecordingSize : 1000;
+  HAL_I2S_Transmit_DMA(pSoundEffectConfig->hi2s, gSamples, transferSize);
+
+  return 1;
+}
+
+SoundEffects_Status_t soundEffects_stopSound(SoundEffects_Config_t* pSoundEffectConfig,
+    StorageDevice_Config_t* pStorageDeviceConfig)
+{
+
+    HAL_I2S_DMAStop(pSoundEffectConfig->hi2s);
+    storageDevice_closeFile(pStorageDeviceConfig);
 
   return 1;
 }
@@ -82,8 +96,9 @@ SoundEffects_Status_t soundEffects_update(SoundEffects_Config_t* pSoundEffectCon
 {
   if (gPlayedSize >= gRecordingSize)
   {
-    HAL_I2S_DMAStop(pSoundEffectConfig->hi2s);
-    storageDevice_closeFile(pStorageDeviceConfig);
+    soundEffects_stopSound(pSoundEffectConfig, pStorageDeviceConfig);
+    gIsPlaying = false;
+    return 1;
   }
 
   if(gCallbackResult == HALF_COMPLETED)
@@ -104,16 +119,23 @@ SoundEffects_Status_t soundEffects_update(SoundEffects_Config_t* pSoundEffectCon
 return 1;
 }
 
+void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
+{
+    extern bool gIsPlaying;
+    extern uint32_t gPlayedSize, gRecordingSize;
 
+    gPlayedSize += 1000;
+
+    if (gPlayedSize >= gRecordingSize)
+    {
+        gIsPlaying = false;
+    }
+
+    gCallbackResult = FULL_COMPLETED;
+}
 
 void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
 {
-  gCallbackResult = HALF_COMPLETED;
-}
-
-void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
-{
-  gCallbackResult =   FULL_COMPLETED;
-  gPlayedSize     +=  1000;
-
+    extern CallBack_Result_t gCallbackResult;
+    gCallbackResult = HALF_COMPLETED;
 }
