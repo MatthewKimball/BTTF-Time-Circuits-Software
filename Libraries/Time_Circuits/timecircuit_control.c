@@ -152,20 +152,13 @@ TimeCircuit_Control_Config_t* timeCircuit_control_init(I2C_HandleTypeDef* const 
   //Update display with retrieved date times
   timeCircuit_control_updateDisplays(pConfig);
 
+  //Enable external RTC
+  #if defined(SET_EXTERNAL_RTC)
+  HAL_GPIO_WritePin( EXT_RTC_RST_GPIO_Port, EXT_RTC_RST_Pin, GPIO_PIN_SET);
+  #endif
 
-//  #if defined(SET_INTERNAL_RTC)
-//
-//
-//  #elif defined(SET_EXTERNAL_RTC)
-//    //Enable RTC
-//    HAL_GPIO_WritePin( EXT_RTC_RST_GPIO_Port, EXT_RTC_RST_Pin, GPIO_PIN_SET);
-//    //Initialise RTC
-//    DS3231_Init(hi2c_rtc);
-//
-//  #endif
-
-    //Update RTC with retrieved present date time
-    timeCircuit_control_setRtcDateTime(pConfig);
+  //Update RTC with retrieved present date time
+  timeCircuit_control_setRtcDateTime(pConfig);
 
   return pConfig;
 }

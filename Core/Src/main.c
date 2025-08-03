@@ -36,7 +36,7 @@
 #include "sound_effects.h"
 #include "storagedevice_control.h"
 #include "timecircuit_control.h"
-#include "ds3231_for_stm32_hal.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
