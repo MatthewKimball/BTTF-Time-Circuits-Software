@@ -4,14 +4,16 @@
  *  Created on: Nov 7, 2024
  *      Author: Professor Gizmo
  */
-#include <timecircuit_control.h>
+#include "timecircuit_control.h"
+#include "datetime_display.h"
+#include "keypad3x4w.h"
+#include "storagedevice_control.h"
 #include "sound_effects.h"
+#include "imu.h"
+#include "ds3231.h"
 #include "cmsis_os.h"
 #include "gpio.h"
 #include <stdint.h>
-#include "imu.h"
-//#include "ds3231_for_stm32_hal.h"
-#include "ds3231.h"
 #include <stdbool.h>
 
 #define DESTINATION_DISPLAY_I2C_ADDRESS     0x71
@@ -65,6 +67,7 @@
 #define MAXIMUM_GLITCH_RANDOM_PERIOD_MS     60000
 
 extern osMessageQueueId_t soundQueueHandle;
+extern StorageDevice_Config_t* gStorageConfig;
 extern volatile bool gGlitchDoubleHit;
 
 const uint8_t   gDefaultDestinationTime[]     = {1,0,2,7,1,9,8,5,1,1,0,0};
@@ -93,7 +96,6 @@ struct TimeCircuit_Control_Config_Tag
   I2C_HandleTypeDef*          hi2c_display;
   I2C_HandleTypeDef*          hi2c_rtc;
   RTC_HandleTypeDef*          hrtc;
-  SPI_HandleTypeDef*          hspi;
   I2S_HandleTypeDef*          hi2s;
 
   DateTime_Display_Config_t*  pDestinationTime;
@@ -108,7 +110,6 @@ struct TimeCircuit_Control_Config_Tag
   uint8_t                     keypadInputValue;
   uint8_t                     keypadInputCount;
 
-  StorageDevice_Config_t*     pStorageDeviceConfig;
   SoundEffects_Config_t*      pSoundEffectConfig;
 
 } TimeCircuit_Control_Config;
@@ -120,16 +121,18 @@ TimeCircuit_Control_Status_t timeCircuit_control_clearDisplays(TimeCircuit_Contr
 TimeCircuit_Control_Status_t timeCircuit_control_setDefaultDateTimes(TimeCircuit_Control_Config_t* const pConfig);
 TimeCircuit_Control_Status_t timeCircuit_control_getRTCMinute(TimeCircuit_Control_Config_t * const pConfig,
     uint8_t * currentMinutes);
+ TimeCircuit_Control_Status_t timeCircuit_control_setRtcDateTime(TimeCircuit_Control_Config_t * const pConfig);
+ TimeCircuit_Control_Status_t timeCircuit_control_getRtcDateTime(TimeCircuit_Control_Config_t * const pConfig);
+
 
 
 TimeCircuit_Control_Config_t* timeCircuit_control_init(I2C_HandleTypeDef* const hi2c_display, I2C_HandleTypeDef* const hi2c_rtc,
-    RTC_HandleTypeDef* hrtc, SPI_HandleTypeDef* hspi, I2S_HandleTypeDef* hi2s)
+    RTC_HandleTypeDef* hrtc, I2S_HandleTypeDef* hi2s)
 {
   TimeCircuit_Control_Config_t* pConfig = malloc(sizeof(TimeCircuit_Control_Config_t));
   pConfig->hi2c_display = hi2c_display;
   pConfig->hi2c_rtc = hi2c_rtc;
   pConfig->hrtc = hrtc;
-  pConfig->hspi = hspi;
   pConfig->hi2s = hi2s;
 
 
@@ -146,26 +149,31 @@ TimeCircuit_Control_Config_t* timeCircuit_control_init(I2C_HandleTypeDef* const 
 //  char filename[] = "locked.wav";
 //  osMessageQueuePut(soundQueueHandle, &filename, 0, 0);
 
-  //Set displays to last stored values or defaults
-  timeCircuit_control_setDefaultDateTimes(pConfig);
-
-  //Update display with retrieved date times
-  timeCircuit_control_updateDisplays(pConfig);
-
   //Enable external RTC
   #if defined(SET_EXTERNAL_RTC)
   HAL_GPIO_WritePin( EXT_RTC_RST_GPIO_Port, EXT_RTC_RST_Pin, GPIO_PIN_SET);
   #endif
 
-  //Update RTC with retrieved present date time
-  timeCircuit_control_setRtcDateTime(pConfig);
+  //Set displays to last stored values or defaults
+  timeCircuit_control_updateStartUpDateTimes(pConfig);
+
+  //Retrieve year data
+  dateTime_getRtcDateTimeData(pConfig->pPresentTime, &pConfig->hRtcDate, &pConfig->hRtcTime);
+
+  //Retrieve RTC date time data
+  timeCircuit_control_getRtcDateTime(pConfig);
+
+  //Set present date time to RTC date time
+  dateTime_setRtcDateTimeData(pConfig->pPresentTime, &pConfig->hRtcDate, &pConfig->hRtcTime);
+
+  //Update display with retrieved date times
+  timeCircuit_control_updateDisplays(pConfig);
 
   return pConfig;
 }
 
 TimeCircuit_Control_Status_t timeCircuit_control_deInit(TimeCircuit_Control_Config_t* const pConfig)
 {
-  storageDevice_demountDrive(pConfig->pStorageDeviceConfig);
   free (pConfig);
   return 1;
 }
@@ -295,63 +303,19 @@ TimeCircuit_Control_Status_t timeCircuit_control_readInputDateTime(TimeCircuit_C
 
   return isSuccess;
 }
-#if defined(SET_INTERNAL_RTC)
+
+
 TimeCircuit_Control_Status_t timeCircuit_control_getRtcDateTime(TimeCircuit_Control_Config_t * const pConfig)
 {
   TimeCircuit_Control_Status_t isSuccess = 1;
 
   //Retrieve RTC Date Time Data
-  isSuccess &= HAL_RTC_GetTime(pConfig->hrtc, &pConfig->hRtcTime, RTC_FORMAT_BIN);
-  isSuccess &= HAL_RTC_GetDate(pConfig->hrtc, &pConfig->hRtcDate, RTC_FORMAT_BIN);
-
-  return isSuccess;
-}
-
-TimeCircuit_Control_Status_t timeCircuit_control_setRtcDateTime(TimeCircuit_Control_Config_t * const pConfig)
-{
-  TimeCircuit_Control_Status_t isSuccess = 1;
-
-  //Retrieve default RTC date time data
-  isSuccess &= timeCircuit_control_getRtcDateTime(pConfig);
-
-  //Get present date time for RTC date time
-  isSuccess &= dateTime_getRtcDateTimeData(pConfig->pPresentTime, &pConfig->hRtcDate, &pConfig->hRtcTime);
-
-  //Set RTC with present time data
-  isSuccess &= HAL_RTC_SetTime(pConfig->hrtc, &pConfig->hRtcTime, RTC_FORMAT_BIN);
-  isSuccess &= HAL_RTC_SetDate(pConfig->hrtc, &pConfig->hRtcDate, RTC_FORMAT_BIN);
-
-  return isSuccess;
-}
-
-TimeCircuit_Control_Status_t timeCircuit_control_getRTCMinute(TimeCircuit_Control_Config_t * const pConfig,
-    uint8_t * currentMinutes)
-{
-  TimeCircuit_Control_Status_t isSuccess = 1;
-
-  isSuccess &= HAL_RTC_GetTime(pConfig->hrtc, &pConfig->hRtcTime, RTC_FORMAT_BIN);
-  *currentMinutes = pConfig->hRtcTime.Minutes;
-
-  return isSuccess;
-}
-
-
-#elif defined(SET_EXTERNAL_RTC)
-TimeCircuit_Control_Status_t timeCircuit_control_getRtcDateTime(TimeCircuit_Control_Config_t * const pConfig)
-{
-  TimeCircuit_Control_Status_t isSuccess = 1;
-
-  //Retrieve RTC Date Time Data
-  isSuccess &= DS3231_GetDateTime(pConfig->hi2c_rtc,
-                                       &pConfig->hRtcTime,
-                                       &pConfig->hRtcDate);
-//  pConfig->hRtcTime.Hours   = DS3231_GetHour();
-//  pConfig->hRtcTime.Minutes = DS3231_GetMinute();
-//  pConfig->hRtcTime.Seconds = DS3231_GetSecond();
-//
-//  pConfig->hRtcDate.Date    = DS3231_GetDate();
-//  pConfig->hRtcDate.Month   = DS3231_GetMonth();
-//  pConfig->hRtcDate.Year    = DS3231_GetYear();
+  #if defined(SET_INTERNAL_RTC)
+    isSuccess &= HAL_RTC_GetTime(pConfig->hrtc, &pConfig->hRtcTime, RTC_FORMAT_BIN);
+    isSuccess &= HAL_RTC_GetDate(pConfig->hrtc, &pConfig->hRtcDate, RTC_FORMAT_BIN);
+  #elif defined(SET_EXTERNAL_RTC)
+    isSuccess &= DS3231_GetDateTime(pConfig->hi2c_rtc, &pConfig->hRtcTime, &pConfig->hRtcDate);
+  #endif
 
   return isSuccess;
 }
@@ -367,17 +331,12 @@ TimeCircuit_Control_Status_t timeCircuit_control_setRtcDateTime(TimeCircuit_Cont
   isSuccess &= dateTime_getRtcDateTimeData(pConfig->pPresentTime, &pConfig->hRtcDate, &pConfig->hRtcTime);
 
   //Set RTC with present date time data
-  isSuccess &= DS3231_SetDateTime(pConfig->hi2c_rtc,
-      &pConfig->hRtcTime,
-      &pConfig->hRtcDate);
-//  DS3231_SetFullTime(pConfig->hRtcTime.Hours,
-//                           pConfig->hRtcTime.Minutes,
-//                           pConfig->hRtcTime.Seconds);
-//
-//  DS3231_SetFullDate(pConfig->hRtcDate.Date,
-//                         pConfig->hRtcDate.Month,
-//                         1,
-//                         0);
+  #if defined(SET_INTERNAL_RTC)
+    isSuccess &= HAL_RTC_GetTime(pConfig->hrtc, &pConfig->hRtcTime, RTC_FORMAT_BIN);
+    isSuccess &= HAL_RTC_GetDate(pConfig->hrtc, &pConfig->hRtcDate, RTC_FORMAT_BIN);
+  #elif defined(SET_EXTERNAL_RTC)
+    isSuccess &= DS3231_SetDateTime(pConfig->hi2c_rtc, &pConfig->hRtcTime, &pConfig->hRtcDate);
+  #endif
 
   return isSuccess;
 }
@@ -387,19 +346,16 @@ TimeCircuit_Control_Status_t timeCircuit_control_getRTCMinute(TimeCircuit_Contro
 {
   TimeCircuit_Control_Status_t isSuccess = 1;
 
-  isSuccess &= DS3231_GetDateTime(pConfig->hi2c_rtc,
-                                       &pConfig->hRtcTime,
-                                       &pConfig->hRtcDate);
+  #if defined(SET_INTERNAL_RTC)
+  isSuccess &= HAL_RTC_GetTime(pConfig->hrtc, &pConfig->hRtcTime, RTC_FORMAT_BIN);
+  #elif defined(SET_EXTERNAL_RTC)
+    isSuccess &= DS3231_GetDateTime(pConfig->hi2c_rtc, &pConfig->hRtcTime, &pConfig->hRtcDate);
+  #endif
 
   *currentMinutes = pConfig->hRtcTime.Minutes;
 
-  //*currentMinutes = DS3231_GetMinute();
-
   return isSuccess;
 }
-
-#endif
-
 
 
 TimeCircuit_Control_Status_t timeCircuit_control_saveDateTimes(TimeCircuit_Control_Config_t * const pConfig)
@@ -417,7 +373,9 @@ TimeCircuit_Control_Status_t timeCircuit_control_saveDateTimes(TimeCircuit_Contr
   }
 
   //Write datetime data to SD card
-  // isSuccess = storageDevice_writeFile(pConfig->pStorageDeviceConfig, writeBuf, sizeof(writeBuf), gStoredDateTimeFileName);
+  isSuccess = storageDevice_writeFile(gStorageConfig, writeBuf, sizeof(writeBuf), gStoredDateTimeFileName);
+
+  isSuccess &= storageDevice_closeFile(gStorageConfig);
 
   return isSuccess;
 }
@@ -434,7 +392,8 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateStartUpDateTimes(TimeCirc
 
 
   //Read datetime data from SD card
- // isSuccess = storageDevice_readFile(pConfig->pStorageDeviceConfig, pReadBuf, sizeof(pReadBuf), gStoredDateTimeFileName);
+  isSuccess = storageDevice_readFile(gStorageConfig, pReadBuf, sizeof(pReadBuf), gStoredDateTimeFileName);
+  isSuccess &= storageDevice_closeFile(gStorageConfig);
 
   //Check read was successful, if not set to default values
   if(isSuccess)
@@ -664,7 +623,7 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateGlitch(TimeCircuit_Contro
   }
 
   // Clear glitch
-  if (gGlitchDoubleHit == true)
+  if ((bIsButtonActivated == true) && (gGlitchDoubleHit == true))
   {
     //Clear glitching display
     isSuccess &= dateTime_clearDisplay(pConfig->pDestinationTime);

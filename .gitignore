@@ -1,1 +1,10 @@
-/Debug/
+# STM32CubeIDE build folders
+Debug/
+Release/
+
+# Backup & temporary files
+*.launch
+*.log
+*.tmp
+*.bak
+*.swp

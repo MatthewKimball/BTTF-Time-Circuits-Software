@@ -121,9 +121,9 @@ int main(void)
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
 
-//  gStorageConfig = storageDevice_init(&hspi1);
+  gStorageConfig = storageDevice_init(&hspi1);
 //  gSoundEffectConfig = soundEffects_init(&hi2s2, MUTE_SWITCH_GPIO_Port, MUTE_SWITCH_Pin);
-  gTimeCircuitConfig = timeCircuit_control_init(&hi2c3, &hi2c2, &hrtc, &hspi1, &hi2s2);
+  gTimeCircuitConfig = timeCircuit_control_init(&hi2c3, &hi2c2, &hrtc, &hi2s2);
 
   osKernelInitialize();    // Initialize kernel BEFORE creating tasks
   MX_FREERTOS_Init();
