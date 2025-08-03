@@ -1,5 +1,0 @@
-../Libraries/Peripherals/ht16k33/ht16k33.c:24:19:ht16k33_init	1
-../Libraries/Peripherals/ht16k33/ht16k33.c:37:18:ht16k33_setSystemSetup	1
-../Libraries/Peripherals/ht16k33/ht16k33.c:49:18:ht16k33_setDisplaySetup	1
-../Libraries/Peripherals/ht16k33/ht16k33.c:65:18:ht16k33_setDimming	1
-../Libraries/Peripherals/ht16k33/ht16k33.c:77:18:ht16k33_updateDisplayData	1

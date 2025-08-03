@@ -1,3 +1,0 @@
-../Libraries/Peripherals/keypad3x4w/keypad3x4w.c:18:23:keypad3x4w_init	1
-../Libraries/Peripherals/keypad3x4w/keypad3x4w.c:27:21:keypad3x4w_setColumnGpio	2
-../Libraries/Peripherals/keypad3x4w/keypad3x4w.c:39:21:keypad3x4w_readKeypad	6
