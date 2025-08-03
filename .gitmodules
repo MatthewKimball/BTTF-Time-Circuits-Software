@@ -4,6 +4,3 @@
 [submodule "Libraries/Peripherals/bno055"]
 	path = Libraries/Peripherals/bno055
 	url = https://github.com/boschsensortec/BNO055_SensorAPI
-[submodule "Libraries/Peripherals/ds3231"]
-	path = Libraries/Peripherals/ds3231
-	url = https://github.com/eepj/stm32-ds3231.git

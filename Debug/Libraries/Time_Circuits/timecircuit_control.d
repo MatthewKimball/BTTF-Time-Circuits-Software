@@ -59,8 +59,7 @@ Libraries/Time_Circuits/timecircuit_control.o: \
  ../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.h \
  ../Core/Inc/gpio.h ../Core/Inc/main.h ../Libraries/Time_Circuits/imu.h \
  C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/bno055/bno055.h \
- C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/ds3231/ds3231_for_stm32_hal.h \
- ../Core/Inc/main.h
+ C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/ds3231/ds3231.h
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/timecircuit_control.h:
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time_Circuits/datetime_display.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
@@ -122,5 +121,4 @@ C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Time
 ../Core/Inc/main.h:
 ../Libraries/Time_Circuits/imu.h:
 C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/bno055/bno055.h:
-C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/ds3231/ds3231_for_stm32_hal.h:
-../Core/Inc/main.h:
+C:/Users/User/STM32CubeIDE/workspace_1.7.0/Time\ Circuit\ Control/Libraries/Peripherals/ds3231/ds3231.h:

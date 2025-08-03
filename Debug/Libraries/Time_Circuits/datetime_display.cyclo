@@ -9,10 +9,10 @@
 ../Libraries/Time_Circuits/datetime_display.c:255:29:dateTime_setRtcDateTimeData	1
 ../Libraries/Time_Circuits/datetime_display.c:270:27:dateTime_copyDateTime	1
 ../Libraries/Time_Circuits/datetime_display.c:281:27:dateTime_clearDisplay	3
-../Libraries/Time_Circuits/datetime_display.c:321:27:dateTime_setLed	1
-../Libraries/Time_Circuits/datetime_display.c:337:27:dateTime_toggleTimeColon	3
-../Libraries/Time_Circuits/datetime_display.c:357:27:dateTime_setDigitSegments	2
-../Libraries/Time_Circuits/datetime_display.c:388:27:dateTime_setAlphaSegments	1
-../Libraries/Time_Circuits/datetime_display.c:400:27:dateTime_updateDisplayGlitch	4
-../Libraries/Time_Circuits/datetime_display.c:447:27:dateTime_convertDateTimeToChar	5
-../Libraries/Time_Circuits/datetime_display.c:475:27:dateTime_updateDisplay	3
+../Libraries/Time_Circuits/datetime_display.c:305:27:dateTime_setLed	1
+../Libraries/Time_Circuits/datetime_display.c:321:27:dateTime_toggleTimeColon	3
+../Libraries/Time_Circuits/datetime_display.c:341:27:dateTime_setDigitSegments	2
+../Libraries/Time_Circuits/datetime_display.c:372:27:dateTime_setAlphaSegments	1
+../Libraries/Time_Circuits/datetime_display.c:384:27:dateTime_updateDisplayGlitch	4
+../Libraries/Time_Circuits/datetime_display.c:431:27:dateTime_convertDateTimeToChar	5
+../Libraries/Time_Circuits/datetime_display.c:459:27:dateTime_updateDisplay	3

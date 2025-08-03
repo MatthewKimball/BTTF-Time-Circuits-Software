@@ -73,6 +73,7 @@
 "./Libraries/CanOpenSTM32/CANopenNode_STM32/OD.o"
 "./Libraries/Peripherals/bno055/bno055.o"
 "./Libraries/Peripherals/bno055/bno055_support.o"
+"./Libraries/Peripherals/ds3231/ds3231.o"
 "./Libraries/Peripherals/ds3231/ds3231_for_stm32_hal.o"
 "./Libraries/Peripherals/ht16k33/ht16k33.o"
 "./Libraries/Peripherals/keypad3x4w/keypad3x4w.o"

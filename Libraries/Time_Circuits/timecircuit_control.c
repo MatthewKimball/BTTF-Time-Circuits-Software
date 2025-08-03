@@ -10,7 +10,8 @@
 #include "gpio.h"
 #include <stdint.h>
 #include "imu.h"
-#include "ds3231_for_stm32_hal.h"
+//#include "ds3231_for_stm32_hal.h"
+#include "ds3231.h"
 #include <stdbool.h>
 
 #define DESTINATION_DISPLAY_I2C_ADDRESS     0x71
@@ -133,9 +134,9 @@ TimeCircuit_Control_Config_t* timeCircuit_control_init(I2C_HandleTypeDef* const 
 
 
   //Initialise the time circuit displays
-  pConfig->pDestinationTime  = dateTime_display_init(pConfig->hi2c_display, DESTINATION_DISPLAY_I2C_ADDRESS);
-  pConfig->pPresentTime      = dateTime_display_init(pConfig->hi2c_display, PRESENT_DISPLAY_I2C_ADDRESS);
-  pConfig->pLastDepartedTime = dateTime_display_init(pConfig->hi2c_display, DEPARTED_DISPLAY_I2C_ADDRESS);
+  pConfig->pDestinationTime  = dateTime_display_init(hi2c_display, DESTINATION_DISPLAY_I2C_ADDRESS);
+  pConfig->pPresentTime      = dateTime_display_init(hi2c_display, PRESENT_DISPLAY_I2C_ADDRESS);
+  pConfig->pLastDepartedTime = dateTime_display_init(hi2c_display, DEPARTED_DISPLAY_I2C_ADDRESS);
 
 
   //Initialise the time circuit keypad
@@ -151,15 +152,20 @@ TimeCircuit_Control_Config_t* timeCircuit_control_init(I2C_HandleTypeDef* const 
   //Update display with retrieved date times
   timeCircuit_control_updateDisplays(pConfig);
 
-  #if defined(SET_INTERNAL_RTC)
+
+//  #if defined(SET_INTERNAL_RTC)
+//
+//
+//  #elif defined(SET_EXTERNAL_RTC)
+//    //Enable RTC
+//    HAL_GPIO_WritePin( EXT_RTC_RST_GPIO_Port, EXT_RTC_RST_Pin, GPIO_PIN_SET);
+//    //Initialise RTC
+//    DS3231_Init(hi2c_rtc);
+//
+//  #endif
+
     //Update RTC with retrieved present date time
     timeCircuit_control_setRtcDateTime(pConfig);
-
-  #elif defined(SET_EXTERNAL_RTC)
-    //Initialise RTC
-    DS3231_Init(pConfig->hi2c_rtc);
-
-  #endif
 
   return pConfig;
 }
@@ -331,7 +337,7 @@ TimeCircuit_Control_Status_t timeCircuit_control_getRTCMinute(TimeCircuit_Contro
   TimeCircuit_Control_Status_t isSuccess = 1;
 
   isSuccess &= HAL_RTC_GetTime(pConfig->hrtc, &pConfig->hRtcTime, RTC_FORMAT_BIN);
-  &currentMinutes = pConfig->hRtcTime.Minutes;
+  *currentMinutes = pConfig->hRtcTime.Minutes;
 
   return isSuccess;
 }
@@ -343,13 +349,16 @@ TimeCircuit_Control_Status_t timeCircuit_control_getRtcDateTime(TimeCircuit_Cont
   TimeCircuit_Control_Status_t isSuccess = 1;
 
   //Retrieve RTC Date Time Data
-  pConfig->hRtcTime.Hours   = DS3231_GetHour();
-  pConfig->hRtcTime.Minutes = DS3231_GetMinute();
-  pConfig->hRtcTime.Seconds = DS3231_GetSecond();
-
-  pConfig->hRtcDate.Date    = DS3231_GetDate();
-  pConfig->hRtcDate.Month   = DS3231_GetMonth();
-  pConfig->hRtcDate.Year    = DS3231_GetYear();
+  isSuccess &= DS3231_GetDateTime(pConfig->hi2c_rtc,
+                                       &pConfig->hRtcTime,
+                                       &pConfig->hRtcDate);
+//  pConfig->hRtcTime.Hours   = DS3231_GetHour();
+//  pConfig->hRtcTime.Minutes = DS3231_GetMinute();
+//  pConfig->hRtcTime.Seconds = DS3231_GetSecond();
+//
+//  pConfig->hRtcDate.Date    = DS3231_GetDate();
+//  pConfig->hRtcDate.Month   = DS3231_GetMonth();
+//  pConfig->hRtcDate.Year    = DS3231_GetYear();
 
   return isSuccess;
 }
@@ -365,14 +374,17 @@ TimeCircuit_Control_Status_t timeCircuit_control_setRtcDateTime(TimeCircuit_Cont
   isSuccess &= dateTime_getRtcDateTimeData(pConfig->pPresentTime, &pConfig->hRtcDate, &pConfig->hRtcTime);
 
   //Set RTC with present date time data
-  DS3231_SetFullTime(pConfig->hRtcTime.Hours,
-                           pConfig->hRtcTime.Minutes,
-                           pConfig->hRtcTime.Seconds);
-
-  DS3231_SetFullDate(pConfig->hRtcDate.Date,
-                         pConfig->hRtcDate.Month,
-                         pConfig->hRtcDate.WeekDay,
-                         pConfig->hRtcDate.Year);
+  isSuccess &= DS3231_SetDateTime(pConfig->hi2c_rtc,
+      &pConfig->hRtcTime,
+      &pConfig->hRtcDate);
+//  DS3231_SetFullTime(pConfig->hRtcTime.Hours,
+//                           pConfig->hRtcTime.Minutes,
+//                           pConfig->hRtcTime.Seconds);
+//
+//  DS3231_SetFullDate(pConfig->hRtcDate.Date,
+//                         pConfig->hRtcDate.Month,
+//                         1,
+//                         0);
 
   return isSuccess;
 }
@@ -382,7 +394,13 @@ TimeCircuit_Control_Status_t timeCircuit_control_getRTCMinute(TimeCircuit_Contro
 {
   TimeCircuit_Control_Status_t isSuccess = 1;
 
-  *currentMinutes = DS3231_GetMinute();
+  isSuccess &= DS3231_GetDateTime(pConfig->hi2c_rtc,
+                                       &pConfig->hRtcTime,
+                                       &pConfig->hRtcDate);
+
+  *currentMinutes = pConfig->hRtcTime.Minutes;
+
+  //*currentMinutes = DS3231_GetMinute();
 
   return isSuccess;
 }
@@ -730,7 +748,6 @@ TimeCircuit_Control_Status_t timeCircuit_control_update(TimeCircuit_Control_Conf
 
   //Update Glitch
   isSuccess &= timeCircuit_control_updateGlitch(pConfig);
-
 
 
   return isSuccess;

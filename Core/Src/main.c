@@ -36,7 +36,7 @@
 #include "sound_effects.h"
 #include "storagedevice_control.h"
 #include "timecircuit_control.h"
-
+#include "ds3231_for_stm32_hal.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -121,8 +121,8 @@ int main(void)
   MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
 
-  gStorageConfig = storageDevice_init(&hspi1);
-  gSoundEffectConfig = soundEffects_init(&hi2s2, MUTE_SWITCH_GPIO_Port, MUTE_SWITCH_Pin);
+//  gStorageConfig = storageDevice_init(&hspi1);
+//  gSoundEffectConfig = soundEffects_init(&hi2s2, MUTE_SWITCH_GPIO_Port, MUTE_SWITCH_Pin);
   gTimeCircuitConfig = timeCircuit_control_init(&hi2c3, &hi2c2, &hrtc, &hspi1, &hi2s2);
 
   osKernelInitialize();    // Initialize kernel BEFORE creating tasks

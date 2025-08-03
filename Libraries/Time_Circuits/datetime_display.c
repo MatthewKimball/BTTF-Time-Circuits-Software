@@ -283,14 +283,6 @@ DateTime_Display_Status_t dateTime_clearDisplay(DateTime_Display_Config_t* const
   uint8_t* clearBuffer = malloc (TOTAL_NUMBER_OF_ROWS);
   DateTime_Display_Status_t isSuccess   = 0;
 
-  //Save colon state
-  uint8_t ColonStateData = 0;
-  uint8_t RequestData = COLON_LED_SEGMENT_ADDRESS;
-
-  isSuccess |= HAL_I2C_Master_Transmit(pConfig->hi2c, (pConfig->i2cAddrs)<<1, &RequestData,  1, HAL_MAX_DELAY);
-  isSuccess |= HAL_I2C_Master_Receive(pConfig->hi2c, ((pConfig->i2cAddrs)<<1)|0x01, &ColonStateData, 1, HAL_MAX_DELAY);
-  ColonStateData &= 0b11000000;
-
   for (int buffCount = 0; buffCount < TOTAL_NUMBER_OF_ROWS; buffCount++)
   {
     clearBuffer[buffCount] = 0x00;
@@ -304,14 +296,6 @@ DateTime_Display_Status_t dateTime_clearDisplay(DateTime_Display_Config_t* const
     isSuccess |= ht16k33_setDisplaySetup(pConfig->hDisplayDriver, Ht16k33_DisplayStatus_On,
         Ht16k33_BlinkingFrequency_Off);
   }
-
-  //Restore colon state
-  uint8_t SegmentData = 0;
-  isSuccess |= HAL_I2C_Master_Transmit(pConfig->hi2c, (pConfig->i2cAddrs)<<1, &RequestData,  1, HAL_MAX_DELAY);
-  isSuccess |= HAL_I2C_Master_Receive(pConfig->hi2c, ((pConfig->i2cAddrs)<<1)|0x01, &SegmentData, 1, HAL_MAX_DELAY);
-  SegmentData &= 0b00111111;
-  SegmentData |= ColonStateData;
-  isSuccess |= ht16k33_updateDisplayData (pConfig->hDisplayDriver, RequestData, &SegmentData, 1);
 
   free(clearBuffer);
 

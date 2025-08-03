@@ -85,6 +85,10 @@ void Error_Handler(void);
 #define SD_CD_GPIO_Port GPIOB
 #define KEYPAD_ENTER_Pin GPIO_PIN_1
 #define KEYPAD_ENTER_GPIO_Port GPIOB
+#define EXT_RTC_SCL_Pin GPIO_PIN_10
+#define EXT_RTC_SCL_GPIO_Port GPIOB
+#define EXT_RTC_SDA_Pin GPIO_PIN_11
+#define EXT_RTC_SDA_GPIO_Port GPIOB
 #define SD_MODE_Pin GPIO_PIN_14
 #define SD_MODE_GPIO_Port GPIOB
 #define CAN_ID_SWITCH_1_Pin GPIO_PIN_6
