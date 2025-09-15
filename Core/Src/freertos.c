@@ -25,10 +25,13 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
 #include <stdbool.h>
 #include "sound_effects.h"
 #include "timecircuit_control.h"
 #include "imu.h"
+#include "CO_app_STM32.h"
+#include "OD.h"
 
 /* USER CODE END Includes */
 
@@ -55,11 +58,13 @@ osThreadId_t colonTaskHandle;
 osThreadId_t mainTaskHandle;
 osMessageQueueId_t soundQueueHandle;
 
-
 // External configuration handles (should be defined elsewhere)
 extern SoundEffects_Config_t* gSoundEffectConfig;
 extern StorageDevice_Config_t* gStorageConfig;
 extern TimeCircuit_Control_Config_t* gTimeCircuitConfig;
+extern CAN_HandleTypeDef hcan1;
+extern TIM_HandleTypeDef htim7;
+extern void MX_CAN1_Init(void);
 
 // Global flag for sound playing
 bool gIsPlaying = false;
@@ -77,7 +82,7 @@ osThreadId_t SoundTaskHandle;
 const osThreadAttr_t SoundTask_attributes = {
   .name = "SoundTask",
   .stack_size = 512 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
+  .priority = (osPriority_t) osPriorityAboveNormal,
 };
 /* Definitions for ColonTask */
 osThreadId_t ColonTaskHandle;
@@ -85,6 +90,13 @@ const osThreadAttr_t ColonTask_attributes = {
   .name = "ColonTask",
   .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityLow,
+};
+/* Definitions for CANopenTask */
+osThreadId_t CANopenTaskHandle;
+const osThreadAttr_t CANopenTask_attributes = {
+  .name = "CANopenTask",
+  .stack_size = 256 * 4,
+  .priority = (osPriority_t) osPriorityBelowNormal,
 };
 
 /* Private function prototypes -----------------------------------------------*/
@@ -95,6 +107,7 @@ const osThreadAttr_t ColonTask_attributes = {
 void StartMainTask(void *argument);
 void StartSoundTask(void *argument);
 void StartColonTask(void *argument);
+void StartCANopen(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -105,6 +118,8 @@ void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
   */
 void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN Init */
+  soundQueueHandle = osMessageQueueNew(8, sizeof(char[32]), NULL);
+  configASSERT(soundQueueHandle != NULL);
 
   /* USER CODE END Init */
 
@@ -134,6 +149,9 @@ void MX_FREERTOS_Init(void) {
   /* creation of ColonTask */
   ColonTaskHandle = osThreadNew(StartColonTask, NULL, &ColonTask_attributes);
 
+  /* creation of CANopenTask */
+  CANopenTaskHandle = osThreadNew(StartCANopen, NULL, &CANopenTask_attributes);
+
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
@@ -155,6 +173,11 @@ void StartMainTask(void *argument)
 {
   /* USER CODE BEGIN StartMainTask */
   imu_bno055_init();
+
+  //Play TC Start Up Sound
+  char filename[] = "locked.wav";
+  osMessageQueuePut(soundQueueHandle, &filename, 0, 0);
+
   /* Infinite loop */
   for(;;)
   {
@@ -174,19 +197,23 @@ void StartMainTask(void *argument)
 /* USER CODE END Header_StartSoundTask */
 void StartSoundTask(void *argument)
 {
-  /* USER CODE BEGIN StartSoundTask */
-  /* Infinite loop */
-  for(;;)
-  {
-//    if (osMessageQueueGet(soundQueueHandle, &currentSound, NULL, osWaitForever) == osOK)
-//    {
-//      soundEffects_playSound(gSoundEffectConfig, gStorageConfig, currentSound);
-//      while (gIsPlaying)
-        osDelay(10); // Wait until sound is finished
-//    }
+    char currentSound[32];
 
-  }
-  /* USER CODE END StartSoundTask */
+    for(;;)
+    {
+      if (osMessageQueueGet(soundQueueHandle, &currentSound, NULL, osWaitForever) == osOK)
+      {
+        soundEffects_playSound(gSoundEffectConfig, gStorageConfig, currentSound);
+        while (gIsPlaying)
+        {
+          soundEffects_update(gSoundEffectConfig, gStorageConfig);
+          osDelay(1);
+        }
+      }
+
+
+
+    }
 }
 
 /* USER CODE BEGIN Header_StartColonTask */
@@ -204,16 +231,45 @@ void StartColonTask(void *argument)
   {
     timeCircuit__toggleTimeColon(gTimeCircuitConfig);
 
-    // Optional: enqueue beep
-//    if (toogleStatus == 3) {
-//      const char* tone = "beep.wav";
-//      osMessageQueuePut(soundQueueHandle, tone, 0, 0);
-  //  }
 
     osDelay(500);
 
 }
   /* USER CODE END StartColonTask */
+}
+
+/* USER CODE BEGIN Header_StartCANopen */
+/**
+* @brief Function implementing the CANopenTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartCANopen */
+void StartCANopen(void *argument)
+{
+  /* USER CODE BEGIN StartCANopen */
+
+  CANopenNodeSTM32 canOpenNodeSTM32;
+  canOpenNodeSTM32.CANHandle = &hcan1;
+  canOpenNodeSTM32.HWInitFunction = MX_CAN1_Init;
+  canOpenNodeSTM32.timerHandle = &htim7;
+  canOpenNodeSTM32.desiredNodeID = 21;
+  canOpenNodeSTM32.baudrate = 1000;
+  canopen_app_init(&canOpenNodeSTM32);
+
+  HAL_TIM_Base_Start_IT(&htim7);
+  HAL_CAN_Start(&hcan1);
+  HAL_NVIC_SetPriority(CAN1_RX0_IRQn, 6, 0);
+  HAL_NVIC_EnableIRQ(CAN1_RX0_IRQn);
+  /* Infinite loop */
+  for(;;)
+  {
+
+    canopen_app_process();
+
+    vTaskDelay(pdMS_TO_TICKS(1));
+  }
+  /* USER CODE END StartCANopen */
 }
 
 /* Private application code --------------------------------------------------*/

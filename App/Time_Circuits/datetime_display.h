@@ -39,6 +39,13 @@ typedef struct
   DateTime_DisplayDataMeridiem_e  Meridiem;
 }DateTime_DisplayData_t;
 
+typedef struct {
+    uint8_t highestSub_indexSupported;
+    uint8_t day, month;
+    uint16_t year;
+    uint8_t hour, minute, meridian;
+} OD_DateTimeRec_t;
+
 typedef struct DateTime_Display_Config_Tag DateTime_Display_Config_t;
 typedef bool DateTime_Display_Status_t;
 
@@ -62,6 +69,7 @@ DateTime_Display_Status_t dateTime_convertDateTimeToChar(DateTime_Display_Config
 DateTime_Display_Status_t dateTime_setLed(DateTime_Display_Config_t* const pConfig, const uint8_t segmentNumber,
        const uint8_t ledState);
 DateTime_Display_Status_t dateTime_clearDisplayExceptColons(DateTime_Display_Config_t* const pConfig);
+DateTime_Display_Status_t dateTime_setRemoteDateTime (const OD_DateTimeRec_t *src, DateTime_Display_Config_t* const dst);
 
 
 

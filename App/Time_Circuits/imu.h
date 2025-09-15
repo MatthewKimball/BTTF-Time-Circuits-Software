@@ -49,6 +49,7 @@ s8 BNO055_I2C_bus_read(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 cnt);
 void BNO055_delay_msek(u32 msek);
 uint8_t imu_bno055_poll_interrupt_status(void);
 void imu_bno055_poll_and_toggle_LED(void);
+IMU_BNO055_Status_t imu_bno055_updateAnyMotionSettings(u8 threshold, u8 duration);
 
 
 #endif /* IMU_H_ */

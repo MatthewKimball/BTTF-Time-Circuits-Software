@@ -6,6 +6,8 @@
  */
 #include <datetime_display.h>
 
+
+
 //7 Segment Wiring Order
 static const uint8_t digitSegmentOrder[] = {
     8,  /* Day Digit 1    */
@@ -105,6 +107,8 @@ struct DateTime_Display_Config_Tag
   uint16_t                  orignalYear;
 
 } DateTime_Display_Config;
+
+
 
 
 DateTime_Display_Config_t * dateTime_display_init(I2C_HandleTypeDef* const hi2c, const uint8_t addrs)
@@ -505,4 +509,17 @@ DateTime_Display_Status_t dateTime_updateDisplay(DateTime_Display_Config_t* cons
 
   return isSuccess;
 }
+
+DateTime_Display_Status_t dateTime_setRemoteDateTime (const OD_DateTimeRec_t *src, DateTime_Display_Config_t* const dst)
+{
+  dst->dateTimeData.Day    = src->day;
+  dst->dateTimeData.Month   = src->month;
+  dst->dateTimeData.Year    = src->year;
+  dst->dateTimeData.Hour    = src->hour;
+  dst->dateTimeData.Minute  = src->minute;
+  dst->dateTimeData.Meridiem= (DateTime_DisplayDataMeridiem_e)src->meridian;
+
+  return 1;
+  }
+
 

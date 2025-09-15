@@ -53,12 +53,13 @@
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/FatFs/src"/>
 									<listOptionValue builtIn="false" value="&quot;${ProjDirPath}/Libraries/Peripherals/ht16k33&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${ProjDirPath}/Libraries/Peripherals/keypad3x4w&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;${ProjDirPath}/Libraries/Time_Circuits&quot;"/>
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/FreeRTOS/Source/include"/>
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2"/>
 									<listOptionValue builtIn="false" value="../Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/Peripherals/bno055}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/Peripherals/ds3231}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/CANopen}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/App/Time_Circuits}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/CanOpenSTM32/CANopenNode}&quot;"/>
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/${ProjName}/Libraries/CanOpenSTM32/CANopenNode_STM32}&quot;"/>
 								</option>
@@ -86,11 +87,14 @@
 							<tool id="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.objcopy.symbolsrec.579989436" name="MCU Output Converter Motorola S-rec with symbols" superClass="com.st.stm32cube.ide.mcu.gnu.managedbuild.tool.objcopy.symbolsrec"/>
 						</toolChain>
 					</folderInfo>
+					<fileInfo id="com.st.stm32cube.ide.mcu.gnu.managedbuild.config.exe.debug.2143451116.1012510884" name="OD.h" rcbsApplicability="disable" resourcePath="Libraries/CanOpenSTM32/CANopenNode_STM32/OD.h" toolsToInvoke=""/>
 					<sourceEntries>
-						<entry excluding="Peripherals/ds3231/examples|CanOpenSTM32/CANopenNode/example|CanOpenSTM32/examples|CanOpenSTM32/legacy" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Libraries"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="CANopen"/>
+						<entry excluding="CanOpenSTM32/CANopenNode_STM32/OD.h|CanOpenSTM32/CANopenNode_STM32/OD.c|Peripherals/ds3231/examples|CanOpenSTM32/CANopenNode/example|CanOpenSTM32/examples|CanOpenSTM32/legacy" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Libraries"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Core"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="FATFS"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Middlewares"/>
+						<entry flags="VALUE_WORKSPACE_PATH" kind="sourcePath" name="App/Time_Circuits"/>
 						<entry flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 					</sourceEntries>
 				</configuration>

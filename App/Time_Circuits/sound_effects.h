@@ -28,7 +28,7 @@ typedef enum
 
 }SoundEffect_Activation_e;
 
-SoundEffects_Config_t* soundEffects_init(I2S_HandleTypeDef* hi2s, GPIO_TypeDef* pGpioPort, uint16_t gpioPin);
+SoundEffects_Config_t* soundEffects_init(I2S_HandleTypeDef* hi2s);
 void soundEffects_deinit(SoundEffects_Config_t* pSoundEffectConfig);
 SoundEffects_Status_t soundEffects_update(SoundEffects_Config_t* pSoundEffectConfig,
     StorageDevice_Config_t* pStorageDeviceConfig);
@@ -38,6 +38,10 @@ SoundEffects_Status_t soundEffects_initPlaySound(SoundEffects_Config_t* pSoundEf
     StorageDevice_Config_t* pStorageDeviceConfig);
 SoundEffects_Status_t soundEffects_stopSound(SoundEffects_Config_t* pSoundEffectConfig,
     StorageDevice_Config_t* pStorageDeviceConfig);
+void soundEffects_forceStop(SoundEffects_Config_t* pCfg, StorageDevice_Config_t* pStorage);
+
+void soundEffects_disableAmplifier(void);
+void soundEffects_readMuteSwitch(void);
 
 void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s);
 void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s);

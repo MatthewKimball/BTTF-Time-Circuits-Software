@@ -56,7 +56,7 @@ StorageDevice_Status_t storageDevice_mountDrive(StorageDevice_Config_t * pConfig
   StorageDevice_Status_t isSuccess = true;
 
   //Recommended delay while SD Card Boots
-  HAL_Delay(100);
+  osDelay(100);
 
   pConfig->fres = f_mount(&pConfig->FatFs, "", 1); //1=mount now
   if (pConfig->fres != FR_OK) {

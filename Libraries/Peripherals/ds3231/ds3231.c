@@ -31,7 +31,7 @@ static uint8_t bcd2dec(uint8_t val) { return (val / 16 * 10) + (val % 16); }
 // Initialize DS3231 (check if device is present)
 HAL_StatusTypeDef DS3231_Init(I2C_HandleTypeDef *hi2c)
 {
-    return HAL_I2C_IsDeviceReady(hi2c, DS3231_I2C_ADDR, 3, 100);
+    return HAL_I2C_IsDeviceReady(hi2c, DS3231_I2C_ADDR, 3, 10);
 }
 
 // Set DS3231 time and date using HAL RTC typedefs
@@ -57,7 +57,7 @@ HAL_StatusTypeDef DS3231_SetDateTime(I2C_HandleTypeDef *hi2c,
     buf[6] = dec2bcd(date->Year);
 
     return HAL_I2C_Mem_Write(hi2c, DS3231_I2C_ADDR, 0x00,
-                             I2C_MEMADD_SIZE_8BIT, buf, 7, 100);
+                             I2C_MEMADD_SIZE_8BIT, buf, 7, 10);
 }
 
 // Get DS3231 time and date into HAL RTC typedefs
@@ -69,7 +69,7 @@ HAL_StatusTypeDef DS3231_GetDateTime(I2C_HandleTypeDef *hi2c,
     HAL_StatusTypeDef status;
 
     status = HAL_I2C_Mem_Read(hi2c, DS3231_I2C_ADDR, 0x00,
-                              I2C_MEMADD_SIZE_8BIT, buf, 7, 100);
+                              I2C_MEMADD_SIZE_8BIT, buf, 7, 10);
     if(status != HAL_OK) return status;
 
     time->Seconds = bcd2dec(buf[0] & 0x7F);

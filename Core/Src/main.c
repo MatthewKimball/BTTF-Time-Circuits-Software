@@ -28,6 +28,7 @@
 #include "i2s.h"
 #include "rtc.h"
 #include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -36,7 +37,7 @@
 #include "sound_effects.h"
 #include "storagedevice_control.h"
 #include "timecircuit_control.h"
-
+#include "CO_app_STM32.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -46,8 +47,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define MUTE_SWITCH_PORT MUTE_SWITCH_GPIO_Port
-#define MUTE_SWITCH_PIN  MUTE_SWITCH_Pin
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -103,13 +103,13 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
-
+  HAL_NVIC_DisableIRQ(CAN1_RX0_IRQn);
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_DMA_Init();
-  MX_CAN1_Init();
+
   MX_I2C1_Init();
   MX_I2C2_Init();
   MX_I2S2_Init();
@@ -119,10 +119,11 @@ int main(void)
   MX_FATFS_Init();
   MX_RTC_Init();
   MX_SPI1_Init();
+  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
 
   gStorageConfig = storageDevice_init(&hspi1);
-//  gSoundEffectConfig = soundEffects_init(&hi2s2, MUTE_SWITCH_GPIO_Port, MUTE_SWITCH_Pin);
+  gSoundEffectConfig = soundEffects_init(&hi2s2);
   gTimeCircuitConfig = timeCircuit_control_init(&hi2c3, &hi2c2, &hrtc, &hi2s2);
 
   osKernelInitialize();    // Initialize kernel BEFORE creating tasks
@@ -149,9 +150,6 @@ int main(void)
 
   while (1)
   {
-
-    //timeCircuit_control_update(gTimeCircuitConfig);
-
 
     /* USER CODE END WHILE */
 
@@ -229,6 +227,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     HAL_IncTick();
   }
   /* USER CODE BEGIN Callback 1 */
+  if (htim->Instance == TIM7)  // or whichever timer you use
+  {
+      canopen_app_interrupt();  // 1ms CANopen tick
+  }
 
   /* USER CODE END Callback 1 */
 }
