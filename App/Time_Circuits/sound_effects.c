@@ -38,7 +38,7 @@ struct SoundEffects_Config_Tag
 volatile CallBack_Result_t gCallbackResult = UNKNOWN;
 volatile uint32_t gPlayedBytes            = 0;   // bytes that I2S has transmitted so far
 uint32_t gRecordingBytes = 0;
-static uint16_t gSamples[1000];
+static uint16_t gSamples[4096];
 
 uint32_t gFileReadSize            = 0;
 uint32_t gRecordingSize           = 0;
@@ -80,7 +80,6 @@ void soundEffects_readMuteSwitch(void)
 SoundEffects_Status_t soundEffects_playSound(SoundEffects_Config_t* pCfg,
     StorageDevice_Config_t* pSD, const char* const filename)
 {
-    // Stop anything current and close any open file
     HAL_I2S_DMAStop(pCfg->hi2s);
     storageDevice_closeFile(pSD);
 
@@ -88,65 +87,76 @@ SoundEffects_Status_t soundEffects_playSound(SoundEffects_Config_t* pCfg,
     gPlayedBytes    = 0;
     gRecordingBytes = 0;
 
-    // Get total PCM DATA size in BYTES (from WAV header 'data' chunk)
     uint32_t totalBytes = 0, dummy = 0;
     storageDevice_readWavDataSize(pSD, filename, &totalBytes, &dummy);
     gRecordingBytes = totalBytes;
 
-    // Prefill FULL buffer (2000 bytes). Pad remainder with zeros if short.
+    // Prefill full buffer (8192 bytes)
     uint32_t justRead = 0;
-    storageDevice_readFileData(pSD, gSamples, 2000, &justRead);
-    if (justRead < 2000) {
+    storageDevice_readFileData(pSD, gSamples, sizeof(gSamples), &justRead);
+    if (justRead < sizeof(gSamples)) {
         uint8_t* p = (uint8_t*)gSamples;
-        memset(p + justRead, 0, 2000u - justRead);
+        memset(p + justRead, 0, sizeof(gSamples) - justRead);
     }
 
     gIsPlaying = true;
-    HAL_I2S_Transmit_DMA(pCfg->hi2s, (uint16_t*)gSamples, 1000);  // count is 16-bit samples
+    HAL_I2S_Transmit_DMA(pCfg->hi2s, gSamples, 4096);  // count in 16-bit samples
     return 1;
 }
+
 
 SoundEffects_Status_t soundEffects_update(SoundEffects_Config_t* pCfg,
     StorageDevice_Config_t * pSD)
 {
-    // Stop when all bytes have been transmitted
+    const uint32_t HALF_BYTES = 4096;   // half-buffer = 2048 samples = 4096 bytes
+
     if (gPlayedBytes >= gRecordingBytes) {
-        HAL_I2S_DMAStop(pCfg->hi2s);
-        storageDevice_closeFile(pSD);
+        // Feed one more zero buffer to flush out DMA pipeline
+        memset(gSamples, 0, sizeof(gSamples));
+        HAL_I2S_Transmit_DMA(pCfg->hi2s, gSamples, 4096);
+        gPlayedBytes = gRecordingBytes; // prevent runaway
+        // Now mark for graceful stop
         gIsPlaying = false;
+        storageDevice_closeFile(pSD);
         gCallbackResult = UNKNOWN;
         return 1;
     }
 
-    // Refill first half (0..999 bytes) after HALF complete
     if (gCallbackResult == HALF_COMPLETED) {
         uint32_t bytesLeft = (gRecordingBytes > gPlayedBytes) ? (gRecordingBytes - gPlayedBytes) : 0;
-        uint32_t toRead    = (bytesLeft >= 1000u) ? 1000u : bytesLeft;
+        uint32_t toRead    = (bytesLeft >= HALF_BYTES) ? HALF_BYTES : bytesLeft;
+        toRead &= ~1u; // enforce 16-bit alignment
 
         uint32_t justRead = 0;
         if (toRead > 0) {
             storageDevice_readFileData(pSD, gSamples, toRead, &justRead);
         }
-        if (justRead < 1000u) {
+        if (justRead < HALF_BYTES) {
             uint8_t* p = (uint8_t*)gSamples;
-            memset(p + justRead, 0, 1000u - justRead);
+            memset(p + justRead, 0, HALF_BYTES - justRead);
+            if (toRead > 0 && justRead < toRead && (gPlayedBytes + toRead) > gRecordingBytes) {
+                gRecordingBytes = gPlayedBytes + toRead;
+            }
         }
 
         gCallbackResult = UNKNOWN;
     }
 
-    // Refill second half (1000..1999 bytes) after FULL complete
     if (gCallbackResult == FULL_COMPLETED) {
         uint32_t bytesLeft = (gRecordingBytes > gPlayedBytes) ? (gRecordingBytes - gPlayedBytes) : 0;
-        uint32_t toRead    = (bytesLeft >= 1000u) ? 1000u : bytesLeft;
+        uint32_t toRead    = (bytesLeft >= HALF_BYTES) ? HALF_BYTES : bytesLeft;
+        toRead &= ~1u;
 
         uint32_t justRead = 0;
         if (toRead > 0) {
-            storageDevice_readFileData(pSD, &gSamples[500], toRead, &justRead);
+            storageDevice_readFileData(pSD, &gSamples[2048], toRead, &justRead);
         }
-        if (justRead < 1000u) {
-            uint8_t* p = (uint8_t*)&gSamples[500];
-            memset(p + justRead, 0, 1000u - justRead);
+        if (justRead < HALF_BYTES) {
+            uint8_t* p = (uint8_t*)&gSamples[2048];
+            memset(p + justRead, 0, HALF_BYTES - justRead);
+            if (toRead > 0 && justRead < toRead && (gPlayedBytes + toRead) > gRecordingBytes) {
+                gRecordingBytes = gPlayedBytes + toRead;
+            }
         }
 
         gCallbackResult = UNKNOWN;
@@ -157,14 +167,16 @@ SoundEffects_Status_t soundEffects_update(SoundEffects_Config_t* pCfg,
 
 
 
+
+
 void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
 {
-    gPlayedBytes += 1000u;           // 500 samples * 2 bytes
+    gPlayedBytes += 4096u;   // 2048 samples * 2 bytes
     gCallbackResult = HALF_COMPLETED;
 }
 
 void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
 {
-    gPlayedBytes += 1000u;           // next 500 samples * 2 bytes
+    gPlayedBytes += 4096u;
     gCallbackResult = FULL_COMPLETED;
 }

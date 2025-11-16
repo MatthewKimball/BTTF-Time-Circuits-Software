@@ -175,7 +175,7 @@ void StartMainTask(void *argument)
   imu_bno055_init();
 
   //Play TC Start Up Sound
-  char filename[] = "locked.wav";
+  char filename[] = "enter_v1.wav";
   osMessageQueuePut(soundQueueHandle, &filename, 0, 0);
 
   /* Infinite loop */
