@@ -269,4 +269,60 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef* i2cHandle)
 
 /* USER CODE BEGIN 1 */
 
+// Standard I2C bus-recovery procedure. A slave that's battery-backed (like
+// the external RTC) can outlive the master's power cycle: if a transaction
+// was in progress when the STM32 lost power, the slave can be left holding
+// SDA low waiting for clocks that will never come, wedging the bus for good
+// until something manually clocks it free. Toggle SCL manually up to 9
+// times (enough to complete any partial byte) with SDA released, issue a
+// STOP condition, then reinitialize the peripheral.
+void I2C2_BusRecovery(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  // HAL_I2C_Init() (called via MX_I2C2_Init() below) only re-runs MspInit -
+  // which restores the pins to I2C alternate-function mode - when the handle
+  // is in its RESET state. Since I2C2 was already initialized once at boot,
+  // a full DeInit here is required or the pins would be left stuck in the
+  // plain-GPIO mode used for bit-banging below, permanently disconnected
+  // from the I2C2 peripheral.
+  HAL_I2C_DeInit(&hi2c2);
+
+  GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_OD;
+  GPIO_InitStruct.Pull  = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+
+  GPIO_InitStruct.Pin = EXT_RTC_SCL_Pin;
+  HAL_GPIO_Init(EXT_RTC_SCL_GPIO_Port, &GPIO_InitStruct);
+  GPIO_InitStruct.Pin = EXT_RTC_SDA_Pin;
+  HAL_GPIO_Init(EXT_RTC_SDA_GPIO_Port, &GPIO_InitStruct);
+
+  HAL_GPIO_WritePin(EXT_RTC_SDA_GPIO_Port, EXT_RTC_SDA_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(EXT_RTC_SCL_GPIO_Port, EXT_RTC_SCL_Pin, GPIO_PIN_SET);
+
+  for (int i = 0; i < 9; i++)
+  {
+    if (HAL_GPIO_ReadPin(EXT_RTC_SDA_GPIO_Port, EXT_RTC_SDA_Pin) == GPIO_PIN_SET)
+    {
+      break; // slave already released the bus
+    }
+    HAL_GPIO_WritePin(EXT_RTC_SCL_GPIO_Port, EXT_RTC_SCL_Pin, GPIO_PIN_RESET);
+    HAL_Delay(1);
+    HAL_GPIO_WritePin(EXT_RTC_SCL_GPIO_Port, EXT_RTC_SCL_Pin, GPIO_PIN_SET);
+    HAL_Delay(1);
+  }
+
+  // STOP condition: SDA low-to-high while SCL is high
+  HAL_GPIO_WritePin(EXT_RTC_SDA_GPIO_Port, EXT_RTC_SDA_Pin, GPIO_PIN_RESET);
+  HAL_Delay(1);
+  HAL_GPIO_WritePin(EXT_RTC_SCL_GPIO_Port, EXT_RTC_SCL_Pin, GPIO_PIN_SET);
+  HAL_Delay(1);
+  HAL_GPIO_WritePin(EXT_RTC_SDA_GPIO_Port, EXT_RTC_SDA_Pin, GPIO_PIN_SET);
+  HAL_Delay(1);
+
+  // Restores AF mode on both pins and re-enables the peripheral clock.
+  MX_I2C2_Init();
+}
+
 /* USER CODE END 1 */
+

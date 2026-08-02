@@ -48,6 +48,8 @@ void MX_I2C3_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 
+void I2C2_BusRecovery(void);
+
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

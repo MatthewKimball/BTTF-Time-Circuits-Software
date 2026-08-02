@@ -27,6 +27,7 @@
 /* USER CODE BEGIN Includes */
 
 #include <stdbool.h>
+#include <string.h>
 #include "sound_effects.h"
 #include "timecircuit_control.h"
 #include "imu.h"
@@ -69,6 +70,14 @@ extern void MX_CAN1_Init(void);
 // Global flag for sound playing
 bool gIsPlaying = false;
 
+// Colon beep is low-priority background "tick" - it must never delay or
+// queue up ahead of interactive sounds (keypad, enter, glitch, locked). It's
+// requested via this flag instead of the shared queue so multiple pending
+// requests coalesce into a single pending beep instead of backing up.
+volatile bool gColonPending = false;
+volatile uint32_t gColonRequestTick = 0;
+#define COLON_STALE_MS 500 // one colon blink half-period - older than this, skip it
+
 /* USER CODE END Variables */
 /* Definitions for MainTask */
 osThreadId_t MainTaskHandle;
@@ -98,6 +107,14 @@ const osThreadAttr_t CANopenTask_attributes = {
   .stack_size = 256 * 4,
   .priority = (osPriority_t) osPriorityBelowNormal,
 };
+/* Definitions for RtcInitTask - isolated so a stuck/hanging RTC I2C bus can
+ * never block MainTask, SoundTask, ColonTask or CANopenTask from running. */
+osThreadId_t RtcInitTaskHandle;
+const osThreadAttr_t RtcInitTask_attributes = {
+  .name = "RtcInitTask",
+  .stack_size = 256 * 4,
+  .priority = (osPriority_t) osPriorityLow,
+};
 
 /* Private function prototypes -----------------------------------------------*/
 /* USER CODE BEGIN FunctionPrototypes */
@@ -108,6 +125,7 @@ void StartMainTask(void *argument);
 void StartSoundTask(void *argument);
 void StartColonTask(void *argument);
 void StartCANopen(void *argument);
+void StartRtcInitTask(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -153,7 +171,8 @@ void MX_FREERTOS_Init(void) {
   CANopenTaskHandle = osThreadNew(StartCANopen, NULL, &CANopenTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
+  /* creation of RtcInitTask */
+  RtcInitTaskHandle = osThreadNew(StartRtcInitTask, NULL, &RtcInitTask_attributes);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
@@ -197,23 +216,58 @@ void StartMainTask(void *argument)
 /* USER CODE END Header_StartSoundTask */
 void StartSoundTask(void *argument)
 {
-    char currentSound[32];
+  /* USER CODE BEGIN StartSoundTask */
+  extern char colonSound_filename[];
+  char currentSound[32];
 
-    for(;;)
-    {
-      if (osMessageQueueGet(soundQueueHandle, &currentSound, NULL, osWaitForever) == osOK)
-      {
-        soundEffects_playSound(gSoundEffectConfig, gStorageConfig, currentSound);
-        while (gIsPlaying)
-        {
-          soundEffects_update(gSoundEffectConfig, gStorageConfig);
-          osDelay(1);
-        }
+  for(;;)
+  {
+    bool haveSound = false;
+    bool playingColon = false;
+
+    if (osMessageQueueGet(soundQueueHandle, &currentSound, NULL, 0) == osOK) {
+      haveSound = true;
+    } else if (gColonPending) {
+      gColonPending = false;
+      if ((HAL_GetTick() - gColonRequestTick) <= COLON_STALE_MS) {
+        strncpy(currentSound, colonSound_filename, sizeof(currentSound) - 1);
+        currentSound[sizeof(currentSound) - 1] = '\0';
+        haveSound = true;
+        playingColon = true;
       }
-
-
-
+      // else: too much time has passed since this beep was due (SoundTask
+      // was busy with something else) - drop it rather than play it late.
     }
+
+    if (haveSound)
+    {
+      soundEffects_playSound(gSoundEffectConfig, gStorageConfig, currentSound);
+      while (gIsPlaying)
+      {
+        // Only the low-priority colon beep gets preempted by a real request
+        // arriving mid-playback. Two real sounds queued back-to-back (e.g.
+        // fast keypad typing) must NOT interrupt each other - each plays to
+        // completion in order, they just never wait behind a colon beep.
+        if (playingColon)
+        {
+          char interrupting[32];
+          if (osMessageQueueGet(soundQueueHandle, &interrupting, NULL, 0) == osOK)
+          {
+            soundEffects_playSound(gSoundEffectConfig, gStorageConfig, interrupting);
+            playingColon = false;
+            continue;
+          }
+        }
+        soundEffects_update(gSoundEffectConfig, gStorageConfig);
+        osDelay(1);
+      }
+    }
+    else
+    {
+      osDelay(1);
+    }
+  }
+  /* USER CODE END StartSoundTask */
 }
 
 /* USER CODE BEGIN Header_StartColonTask */
@@ -270,6 +324,27 @@ void StartCANopen(void *argument)
     vTaskDelay(pdMS_TO_TICKS(1));
   }
   /* USER CODE END StartCANopen */
+}
+
+/**
+* @brief One-shot task: initializes the external RTC after the scheduler is
+* already running. If the RTC I2C bus is stuck or the hardware is faulty,
+* this task alone stalls - every other task (keypad/display, sound, colon,
+* CAN) continues completely unaffected, guaranteeing the RTC can never again
+* prevent the rest of the board from booting and working normally.
+* @param argument: Not used
+* @retval None
+*/
+void StartRtcInitTask(void *argument)
+{
+  timeCircuit_control_initRTC(gTimeCircuitConfig);
+
+  // One-shot - nothing left to do, so just idle forever rather than exit
+  // (avoids relying on osThreadExit/OS task cleanup semantics).
+  for(;;)
+  {
+    osDelay(1000);
+  }
 }
 
 /* Private application code --------------------------------------------------*/
