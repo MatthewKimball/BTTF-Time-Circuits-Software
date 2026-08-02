@@ -43,6 +43,7 @@ typedef struct {
 
 
 IMU_BNO055_Status_t imu_bno055_init(void);
+void imu_bno055_service(void);
 
 s8 BNO055_I2C_bus_write(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 cnt);
 s8 BNO055_I2C_bus_read(u8 dev_addr, u8 reg_addr, u8 *reg_data, u8 cnt);

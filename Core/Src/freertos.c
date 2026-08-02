@@ -201,6 +201,7 @@ void StartMainTask(void *argument)
   for(;;)
   {
     timeCircuit_control_update(gTimeCircuitConfig);
+    imu_bno055_service();
     osDelay(20); // Run control update every 20ms (adjust as needed)
 
   }
