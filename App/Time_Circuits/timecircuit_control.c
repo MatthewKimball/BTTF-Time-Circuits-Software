@@ -277,6 +277,15 @@ TimeCircuit_Control_Status_t timeCircuit_control_setDefaultDateTimes(TimeCircuit
   isSuccess &= dateTime_setDisplayData(pConfig->pPresentTime, gDefaultPresentTime);
   isSuccess &= dateTime_setDisplayData(pConfig->pLastDepartedTime, gDefaultLastDepartedTime);
 
+  // Keep the keypad input buffer in sync with what's now on the destination
+  // display, so pressing the destination-time Enter key without typing
+  // anything new re-validates this default instead of a stale/empty buffer.
+  for (uint8_t characterCount = 0; characterCount < MAXIMUM_DATETIME_INPUT_CHARS; characterCount++)
+  {
+    pConfig->keypadInput[characterCount] = gDefaultDestinationTime[characterCount];
+  }
+  pConfig->keypadInputCount = MAXIMUM_DATETIME_INPUT_CHARS;
+
   return isSuccess;
 }
 
@@ -501,6 +510,20 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateStartUpDateTimes(TimeCirc
         pStartUpDateTime[characterCount] = pReadBuf[characterCount + (displayCount * MAXIMUM_DATETIME_INPUT_CHARS)] - '0';
       }
       isSuccess &= dateTime_setDisplayData((pDateTimeDisplays[displayCount]), pStartUpDateTime);
+
+      // Mirror the restored destination time into the keypad input buffer.
+      // Without this, the buffer sits empty from boot until the user types
+      // a full new entry, so pressing the destination-time Enter key first
+      // (to just confirm the value already on the display) re-validates an
+      // empty buffer and blanks the display instead.
+      if (displayCount == 0)
+      {
+        for (uint8_t characterCount = 0; characterCount < MAXIMUM_DATETIME_INPUT_CHARS; characterCount++)
+        {
+          pConfig->keypadInput[characterCount] = pStartUpDateTime[characterCount];
+        }
+        pConfig->keypadInputCount = MAXIMUM_DATETIME_INPUT_CHARS;
+      }
     }
       if (isSuccess == false)
       {
@@ -716,8 +739,11 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateGlitch(TimeCircuit_Contro
       randomFaultTime  = rand() % gGlitchPeriodMs;
       previousFaultTime = HAL_GetTick();
     } else {
-      /* turned OFF: restore destination display */
-      isSuccess &= dateTime_clearDisplay(pConfig->pDestinationTime);
+      /* turned OFF: restore destination display. No clear beforehand -
+       * dateTime_updateDisplay() unconditionally repaints every alpha,
+       * digit, and meridiem segment already, so clearing first only
+       * produced a visible blank-then-redraw flicker with nothing to show
+       * for it. */
       isSuccess  = dateTime_updateDisplay(pConfig->pDestinationTime);
       return isSuccess;
     }
@@ -731,7 +757,7 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateGlitch(TimeCircuit_Contro
   {
     switch (stateCount) {
       case 0:
-        isSuccess &= dateTime_clearDisplay(pConfig->pDestinationTime);
+        isSuccess &= dateTime_clearDisplayExceptColons(pConfig->pDestinationTime);
         stateCount++;
         break;
 
@@ -752,7 +778,7 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateGlitch(TimeCircuit_Contro
 
   /* --- double-hit clears then re-arms --- */
   if (effective && gGlitchDoubleHit) {
-    isSuccess &= dateTime_clearDisplay(pConfig->pDestinationTime);
+    isSuccess &= dateTime_clearDisplayExceptColons(pConfig->pDestinationTime);
     osDelay(500);
     isSuccess &= dateTime_updateDisplayGlitch(pConfig->pDestinationTime, gGlitchDisplayChars);
     osDelay(100);

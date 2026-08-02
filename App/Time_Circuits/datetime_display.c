@@ -332,6 +332,41 @@ DateTime_Display_Status_t dateTime_clearDisplay(DateTime_Display_Config_t* const
   return isSuccess;
 }
 
+DateTime_Display_Status_t dateTime_clearDisplayExceptColons(DateTime_Display_Config_t* const pConfig)
+{
+  uint8_t* clearBuffer = malloc (TOTAL_NUMBER_OF_ROWS);
+  DateTime_Display_Status_t isSuccess   = 0;
+
+  // Save colon state before the wipe below, same pattern used by
+  // dateTime_updateDisplay()/dateTime_updateDisplayGlitch() - the colon
+  // LEDs run on their own independent toggle timer and shouldn't visibly
+  // change just because the digit/alpha segments are being cleared.
+  uint8_t ColonStateData = 0;
+  uint8_t RequestData = COLON_LED_SEGMENT_ADDRESS;
+
+  isSuccess |= HAL_I2C_Master_Transmit(pConfig->hi2c, (pConfig->i2cAddrs)<<1, &RequestData,  1, HAL_MAX_DELAY);
+  isSuccess |= HAL_I2C_Master_Receive(pConfig->hi2c, ((pConfig->i2cAddrs)<<1)|0x01, &ColonStateData, 1, HAL_MAX_DELAY);
+  ColonStateData &= 0b11000000;
+
+  for (int buffCount = 0; buffCount < TOTAL_NUMBER_OF_ROWS; buffCount++)
+  {
+    clearBuffer[buffCount] = 0x00;
+  }
+
+  isSuccess |= ht16k33_updateDisplayData (pConfig->hDisplayDriver, DISPLAY_DATA_REG_ADDRESS, clearBuffer,
+      TOTAL_NUMBER_OF_ROWS);
+
+  isSuccess |= ht16k33_setDisplaySetup(pConfig->hDisplayDriver, Ht16k33_DisplayStatus_On,
+      Ht16k33_BlinkingFrequency_Off);
+
+  free(clearBuffer);
+
+  //Restore colon state
+  isSuccess |= ht16k33_updateDisplayData (pConfig->hDisplayDriver, RequestData, &ColonStateData, 1);
+
+  return isSuccess;
+}
+
 DateTime_Display_Status_t dateTime_setLed(DateTime_Display_Config_t* const pConfig, const uint8_t segmentNumber,
        const uint8_t ledState)
 {
