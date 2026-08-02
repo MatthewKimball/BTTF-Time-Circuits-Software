@@ -1,0 +1,696 @@
+const API = "";
+
+let OD = null; // { entries: [...], stateNames: {...} }
+
+function log(msg, level = "info") {
+  const el = document.getElementById("log");
+  const time = new Date().toLocaleTimeString();
+  const prefix = level === "error" ? "ERROR" : level === "warn" ? "WARN" : "OK";
+  el.textContent = `[${time}] ${prefix}: ${msg}\n` + el.textContent;
+}
+
+async function apiRead(index, subindex) {
+  const res = await fetch(`${API}/api/read?index=${index}&subindex=${subindex}`, { cache: "no-store" });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `read ${index.toString(16)}:${subindex} failed (${res.status})`);
+  }
+  const body = await res.json();
+  return body.value;
+}
+
+async function apiWrite(index, subindex, value) {
+  const res = await fetch(`${API}/api/write`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ index, subindex, value }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail || `write ${index.toString(16)}:${subindex} failed (${res.status})`);
+  }
+  return true;
+}
+
+async function setBit(index, subindex, mask, on, label) {
+  try {
+    const current = await apiRead(index, subindex);
+    const next = on ? (current | mask) : (current & ~mask & 0xff);
+    await apiWrite(index, subindex, next);
+    log(`${label}: ${on ? "on" : "off"}`);
+  } catch (err) {
+    log(`${label}: ${err.message}`, "error");
+  }
+}
+
+async function pulseBit(index, subindex, mask, label) {
+  try {
+    const current = await apiRead(index, subindex);
+    await apiWrite(index, subindex, current | mask);
+    log(`${label}: sent`);
+  } catch (err) {
+    log(`${label}: ${err.message}`, "error");
+  }
+}
+
+// ---------- Connection status ----------
+
+async function refreshHealth() {
+  const dot = document.getElementById("conn-dot");
+  const text = document.getElementById("conn-text");
+  try {
+    const res = await fetch(`${API}/api/health`, { cache: "no-store" });
+    const body = await res.json();
+    if (body.connected) {
+      dot.className = "dot ok";
+      text.textContent = `connected: ${body.port} @ ${body.bitrate} bps, node ${body.node_id}`;
+    } else {
+      dot.className = "dot";
+      text.textContent = `not connected: ${body.error || "unknown error"}`;
+    }
+  } catch (err) {
+    dot.className = "dot";
+    text.textContent = `backend unreachable: ${err.message}`;
+  }
+}
+
+document.getElementById("reconnect-btn").addEventListener("click", async () => {
+  document.getElementById("conn-text").textContent = "reconnecting…";
+  try {
+    await fetch(`${API}/api/reconnect`, { method: "POST" });
+  } catch (err) {
+    log(`reconnect failed: ${err.message}`, "error");
+  }
+  await refreshHealth();
+});
+
+// ---------- Live status (WebSocket) ----------
+
+function connectLiveSocket() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${proto}://${location.host}/ws/live`);
+
+  ws.onmessage = (ev) => {
+    const data = JSON.parse(ev.data);
+    const state = data["0x2101:0"];
+    const buttons = data["0x2100:0"];
+
+    const stateDisplay = document.getElementById("state-display");
+    if (state !== null && state !== undefined && OD) {
+      stateDisplay.textContent = OD.stateNames[state] ?? `#${state}`;
+    } else {
+      stateDisplay.textContent = "—";
+    }
+
+    if (buttons !== null && buttons !== undefined) {
+      const switchMasks = { glitch: 1, keypadEnter: 2, mute: 4, timeTravel: 8 };
+      for (const [name, mask] of Object.entries(switchMasks)) {
+        const el = document.querySelector(`.switch[data-name="${name}"]`);
+        if (el) el.classList.toggle("on", (buttons & mask) !== 0);
+      }
+    }
+  };
+
+  ws.onclose = () => {
+    setTimeout(connectLiveSocket, 2000);
+  };
+  ws.onerror = () => ws.close();
+}
+
+// ---------- State control ----------
+
+document.querySelectorAll("#state-control-card button[data-state]").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const value = parseInt(btn.dataset.state, 10);
+    try {
+      await apiWrite(0x2102, 0, value);
+      log(`requested state: ${btn.textContent}`);
+    } catch (err) {
+      log(`request state failed: ${err.message}`, "error");
+    }
+  });
+});
+
+// ---------- Date/time cards (built from OD metadata) ----------
+
+const DATETIME_ENTRIES = [0x2000, 0x2001, 0x2002];
+
+const TZ_GROUPS = {
+  "North America": [
+    "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Anchorage",
+  ],
+  "Europe": [
+    "Europe/London", "Europe/Dublin", "Europe/Paris", "Europe/Berlin", "Europe/Madrid",
+    "Europe/Rome", "Europe/Amsterdam", "Europe/Warsaw", "Europe/Athens", "Europe/Moscow",
+  ],
+  "Asia / Pacific": [
+    "Asia/Dubai", "Asia/Kolkata", "Asia/Shanghai", "Asia/Tokyo", "Asia/Seoul",
+    "Asia/Singapore", "Australia/Sydney", "Australia/Brisbane", "Australia/Perth", "Pacific/Auckland",
+  ],
+  "Other": ["UTC"],
+};
+
+const TZ_OPTIONS_HTML = Object.entries(TZ_GROUPS)
+  .map(
+    ([group, zones]) =>
+      `<optgroup label="${group}">` +
+      zones.map((z) => `<option value="${z}" ${z === "America/New_York" ? "selected" : ""}>${z}</option>`).join("") +
+      `</optgroup>`
+  )
+  .join("");
+
+function buildDateTimeCards() {
+  const grid = document.getElementById("datetime-grid");
+  grid.innerHTML = "";
+
+  for (const index of DATETIME_ENTRIES) {
+    const entry = OD.entries.find((e) => e.index === index);
+    if (!entry) continue;
+
+    const card = document.createElement("section");
+    card.className = "card";
+    card.innerHTML = `<h2>${entry.label}</h2><div class="dt-fields"></div><div class="field-actions"></div>`;
+    const fieldsEl = card.querySelector(".dt-fields");
+    const actionsEl = card.querySelector(".field-actions");
+
+    for (const f of entry.fields) {
+      const label = document.createElement("label");
+      if (f.name === "meridian") {
+        label.innerHTML = `${f.label}
+          <select data-subindex="${f.subindex}">
+            <option value="1">AM</option>
+            <option value="2">PM</option>
+          </select>`;
+      } else {
+        label.innerHTML = `${f.label}
+          <input type="number" data-subindex="${f.subindex}" min="${f.min ?? ""}" max="${f.max ?? ""}">`;
+      }
+      fieldsEl.appendChild(label);
+    }
+
+    const readBtn = document.createElement("button");
+    readBtn.className = "secondary";
+    readBtn.textContent = "Read";
+    readBtn.addEventListener("click", async () => {
+      try {
+        for (const f of entry.fields) {
+          const value = await apiRead(index, f.subindex);
+          const input = fieldsEl.querySelector(`[data-subindex="${f.subindex}"]`);
+          if (input) input.value = value;
+        }
+        log(`${entry.label}: read from device`);
+      } catch (err) {
+        log(`${entry.label} read failed: ${err.message}`, "error");
+      }
+    });
+
+    // Writes every field's current input value to the device. Returns the
+    // values written, since callers that then trigger an apply action need
+    // to wait for this to actually finish (rather than firing writes and
+    // the apply trigger concurrently, which could race on the CAN bus).
+    async function writeAllFields() {
+      const values = {};
+      for (const f of entry.fields) {
+        const input = fieldsEl.querySelector(`[data-subindex="${f.subindex}"]`);
+        const value = parseInt(input.value, 10);
+        if (Number.isNaN(value)) throw new Error(`${f.label} is not a number`);
+        await apiWrite(index, f.subindex, value);
+        values[f.name] = value;
+      }
+      return values;
+    }
+
+    const writeBtn = document.createElement("button");
+    writeBtn.textContent = "Write";
+    writeBtn.addEventListener("click", async () => {
+      try {
+        await writeAllFields();
+        log(`${entry.label}: written to device`);
+      } catch (err) {
+        log(`${entry.label} write failed: ${err.message}`, "error");
+      }
+    });
+
+    actionsEl.appendChild(readBtn);
+    actionsEl.appendChild(writeBtn);
+
+    if (index === 0x2000) {
+      const applyBtn = document.createElement("button");
+      applyBtn.textContent = "Update";
+      applyBtn.title = "Write fields, then trigger Update Destination Date";
+      applyBtn.addEventListener("click", async () => {
+        try {
+          await writeAllFields();
+          await pulseBit(0x2200, 0, 1 << 3, "Update Destination Date");
+        } catch (err) {
+          log(`${entry.label} update failed: ${err.message}`, "error");
+        }
+      });
+      actionsEl.appendChild(applyBtn);
+    }
+
+    if (index === 0x2001) {
+      const applyBtn = document.createElement("button");
+      applyBtn.textContent = "Update";
+      applyBtn.title = "Write the fields above, then apply them to the display and RTC";
+      applyBtn.addEventListener("click", async () => {
+        try {
+          await writeAllFields();
+          await applyAllDisplaysFromOd();
+          log(`${entry.label}: written and applied to display/RTC`);
+        } catch (err) {
+          log(`${entry.label} update failed: ${err.message}`, "error");
+        }
+      });
+      actionsEl.appendChild(applyBtn);
+
+      const tzLabel = document.createElement("label");
+      tzLabel.style.marginRight = "0.5rem";
+      tzLabel.innerHTML = `Timezone <select id="realtime-tz-select">${TZ_OPTIONS_HTML}</select>`;
+      actionsEl.appendChild(tzLabel);
+
+      const syncBtn = document.createElement("button");
+      syncBtn.textContent = "Sync to Real Time";
+      syncBtn.title = "Fetch accurate current time for the selected timezone and apply it exactly on the next :00 mark";
+      actionsEl.appendChild(syncBtn);
+
+      const detectBtn = document.createElement("button");
+      detectBtn.textContent = "Update to My Local Timezone";
+      detectBtn.title = "Detect this browser's local timezone and sync to it exactly on the next :00 mark";
+      actionsEl.appendChild(detectBtn);
+
+      const statusEl = document.createElement("div");
+      statusEl.className = "hint";
+      statusEl.style.marginTop = "0.5rem";
+      card.appendChild(statusEl);
+
+      syncBtn.addEventListener("click", () => {
+        const tzSelect = document.getElementById("realtime-tz-select");
+        syncPresentTimeToReal(fieldsEl, statusEl, syncBtn, tzSelect.value);
+      });
+
+      detectBtn.addEventListener("click", () => {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const tzSelect = document.getElementById("realtime-tz-select");
+        // Only updates the dropdown if the detected zone happens to be one
+        // of the listed options - the sync itself always uses the exact
+        // detected value regardless, shown in the status line below.
+        tzSelect.value = tz;
+        syncPresentTimeToReal(fieldsEl, statusEl, detectBtn, tz);
+      });
+    }
+
+    if (index === 0x2002) {
+      const applyBtn = document.createElement("button");
+      applyBtn.textContent = "Update";
+      applyBtn.title = "Write the fields above, then apply them to the displays " +
+        "(the firmware has no last-departed-only trigger, so this refreshes all three displays)";
+      applyBtn.addEventListener("click", async () => {
+        try {
+          await writeAllFields();
+          await applyAllDisplaysFromOd();
+          log(`${entry.label}: written and applied to displays`);
+        } catch (err) {
+          log(`${entry.label} update failed: ${err.message}`, "error");
+        }
+      });
+      actionsEl.appendChild(applyBtn);
+    }
+
+    grid.appendChild(card);
+  }
+}
+
+// Applies whatever is currently in the OD's destination/present/last-
+// departed records to all three physical displays. Must be two SEPARATE
+// writes in this order: the firmware checks UPDATE_ALL_DISPLAYS (bit1)
+// before SET_ALL_DISPLAYS (bit2) in code, regardless of bit-mask numeric
+// order, so combining them applies UPDATE_ALL_DISPLAYS to the stale
+// pre-sync data. Used for present time too (not just a UPDATE_RTC-only
+// apply) because the once-a-minute present-time refresh in
+// timeCircuit_control_updatePresentDateTime() only redraws the physical
+// display when the raw RTC minute value (0-59) differs from the last one
+// seen - if a synced time's minute happens to coincide with whatever was
+// last cached, the display silently never redraws even though the RTC
+// chip is correctly updated. UPDATE_ALL_DISPLAYS redraws unconditionally.
+// Also note the firmware only redraws if ALL THREE records currently hold
+// a valid date - if destination or last-departed is somehow invalid, this
+// silently no-ops.
+async function applyAllDisplaysFromOd() {
+  await apiWrite(0x2200, 0, 1 << 2); // SET_ALL_DISPLAYS
+  await apiWrite(0x2200, 0, 1 << 1); // UPDATE_ALL_DISPLAYS
+}
+
+// ---------- Sync present time to real time ----------
+
+// Matches the 24h->12h conversion in App/Time_Circuits/datetime_display.c's
+// dateTime_setDateTimeHour(): 0 -> 12 AM, 1-11 -> AM, 12 -> 12 PM, 13-23 -> PM.
+function to12Hour(hour24) {
+  const meridian = hour24 < 12 ? 1 : 2; // 1=AM, 2=PM
+  let hour12 = hour24 % 12;
+  if (hour12 === 0) hour12 = 12;
+  return { hour: hour12, meridian };
+}
+
+// Fetches the current time for a zone and parses the response's OWN
+// year/month/day/hour/minute/second digits directly out of the ISO string
+// (the backend already computed correct wall-clock fields for the target
+// zone). Deliberately does NOT go through `new Date(...)` + .getHours() -
+// a JS Date is just an absolute instant with no zone attached, and reading
+// fields back out of one uses the BROWSER'S OWN system timezone, which may
+// not match the requested zone at all.
+async function fetchTimeParts(tz) {
+  // Defense in depth against caching, even though a live diagnostic capture
+  // showed a ~19 minute stale value arrive in a fast (393ms) round trip -
+  // meaning the staleness was baked into the response itself, not caused by
+  // this request being served from a browser/proxy cache. Left in anyway:
+  // it's cheap, correct, and rules the caching class of bug out entirely.
+  const res = await fetch(`/api/realtime?tz=${encodeURIComponent(tz)}&_=${Date.now()}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`realtime lookup failed (${res.status})`);
+  const body = await res.json();
+  const m = body.iso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+  if (!m) throw new Error(`unexpected time format from server: ${body.iso}`);
+  return {
+    year: parseInt(m[1], 10),
+    month: parseInt(m[2], 10),
+    day: parseInt(m[3], 10),
+    hour: parseInt(m[4], 10),
+    minute: parseInt(m[5], 10),
+    second: parseInt(m[6], 10),
+    source: body.source,
+    error: body.error,
+    // Date.parse() on the FULL iso string (with its explicit numeric UTC
+    // offset) correctly resolves to an absolute instant - safe to use here
+    // purely as an epoch value for a plausibility check below. This is a
+    // different use than reading .getHours()/.getMinutes() back out of a
+    // Date object, which re-interprets in the browser's own local zone and
+    // was the earlier (real, but distinct) bug.
+    epochMs: Date.parse(body.iso),
+  };
+}
+
+// Fetches the current time for a zone. Deliberately does NOT cross-check
+// the result against this browser's own clock: an earlier version did,
+// and it turned out to reject perfectly correct fetched data whenever the
+// machine running the browser had its own clock wrong (confirmed in this
+// project's dev sandbox, whose system clock was independently found to be
+// running ~18 minutes fast via the plain OS `date` command). The entire
+// point of fetching online time is to work even when a local clock can't
+// be trusted - the backend does its own (much more lenient) sanity check
+// server-side instead, since the server is the actual source of truth in
+// the target deployment (a Pi serving multiple browsers, none of whose
+// clocks should be trusted as a reference). Logging is kept for
+// visibility into what was actually fetched.
+async function fetchPlausibleTimeParts(tz, statusEl) {
+  statusEl.textContent = "Fetching accurate time…";
+
+  const fetchStartedAt = new Date();
+  const target = await fetchTimeParts(tz);
+  const fetchFinishedAt = new Date();
+
+  log(
+    `Real-time sync fetch: requested tz=${tz} at browser-local ${fetchStartedAt.toISOString()} `
+    + `- got back {source: ${target.source}, year: ${target.year}, month: ${target.month}, `
+    + `day: ${target.day}, hour: ${target.hour}, minute: ${target.minute}, second: ${target.second}} `
+    + `- response received at ${fetchFinishedAt.toISOString()} (round trip ${fetchFinishedAt - fetchStartedAt}ms)`
+  );
+  console.log("[TimeCircuits sync diagnostic]", {
+    tz,
+    fetchStartedAt: fetchStartedAt.toISOString(),
+    fetchFinishedAt: fetchFinishedAt.toISOString(),
+    roundTripMs: fetchFinishedAt - fetchStartedAt,
+    target,
+  });
+
+  return target;
+}
+
+let realTimeSyncActive = false;
+let realTimeSyncArmedButton = null; // whichever button actually armed the pending sync
+
+async function syncPresentTimeToReal(fieldsEl, statusEl, button, tz) {
+  if (realTimeSyncActive) {
+    // Second click while armed = cancel, regardless of which of the two
+    // sync buttons was clicked - reset whichever one actually armed it.
+    realTimeSyncActive = false;
+    statusEl.textContent = "Cancelled.";
+    if (realTimeSyncArmedButton) realTimeSyncArmedButton.textContent = realTimeSyncArmedButton.dataset.idleLabel;
+    realTimeSyncArmedButton = null;
+    return;
+  }
+
+  realTimeSyncActive = true;
+  realTimeSyncArmedButton = button;
+  button.dataset.idleLabel = button.textContent;
+  button.textContent = "Cancel Sync";
+  statusEl.textContent = "Waiting for :00…";
+
+  try {
+    // Wait until roughly the top of a minute using the browser's own RAW,
+    // uncorrected clock - purely as a rough scheduling signal for WHEN to
+    // do the real fetch below, never as a value we actually write. This is
+    // deliberately NOT "fetch once, then trust an extrapolated offset for
+    // up to 60s while waiting for :00": if the tab gets throttled in the
+    // background, or the machine sleeps, during that wait, an extrapolated
+    // offset goes stale and silently writes the wrong time - which is
+    // exactly the class of bug that caused this to be 18-30 minutes off
+    // for real users. Waiting on the raw local clock is fine here because
+    // we only care about its EDGE (seconds wrapping to 0), not its value.
+    await new Promise((resolve, reject) => {
+      const poll = () => {
+        if (!realTimeSyncActive) {
+          reject(new Error("cancelled"));
+          return;
+        }
+        const secondsLeft = 60 - new Date().getSeconds();
+        statusEl.textContent = `Waiting for :00… (~${secondsLeft === 60 ? 0 : secondsLeft}s, rough local estimate)`;
+        if (new Date().getSeconds() === 0) {
+          resolve();
+          return;
+        }
+        setTimeout(poll, 100);
+      };
+      poll();
+    });
+
+    // NOW do the one authoritative, freshly-fetched lookup - right at the
+    // trigger moment, not up to a minute earlier.
+    const target = await fetchPlausibleTimeParts(tz, statusEl);
+
+    const { hour, meridian } = to12Hour(target.hour);
+    const fields = {
+      day: target.day,
+      month: target.month,
+      year: target.year,
+      hour,
+      minute: target.minute,
+      meridian,
+    };
+
+    for (const f of OD.entries.find((e) => e.index === 0x2001).fields) {
+      const value = fields[f.name];
+      await apiWrite(0x2001, f.subindex, value);
+      const input = fieldsEl.querySelector(`[data-subindex="${f.subindex}"]`);
+      if (input) input.value = value;
+    }
+
+    await applyAllDisplaysFromOd();
+
+    const targetStr = `${String(target.month).padStart(2, "0")}/${String(target.day).padStart(2, "0")}/${target.year} `
+      + `${String(hour).padStart(2, "0")}:${String(target.minute).padStart(2, "0")} ${meridian === 1 ? "AM" : "PM"} (${tz})`;
+    statusEl.textContent = `Synced to ${targetStr}.`;
+    log(`Present time synced to real time: ${targetStr}`);
+  } catch (err) {
+    if (err.message !== "cancelled") {
+      statusEl.textContent = `Sync failed: ${err.message}`;
+      log(`Real-time sync failed: ${err.message}`, "error");
+    }
+  } finally {
+    realTimeSyncActive = false;
+    realTimeSyncArmedButton = null;
+    button.textContent = button.dataset.idleLabel;
+  }
+}
+
+// ---------- Function control (built from OD metadata) ----------
+
+function buildFunctionControlButtons() {
+  const entry = OD.entries.find((e) => e.index === 0x2200);
+  const container = document.getElementById("function-control-buttons");
+  container.innerHTML = "";
+  for (const bit of entry.fields[0].bits) {
+    const btn = document.createElement("button");
+    btn.textContent = bit.label;
+    btn.addEventListener("click", () => pulseBit(0x2200, 0, bit.mask, bit.label));
+    container.appendChild(btn);
+  }
+}
+
+// ---------- Settings ----------
+
+function buildSettingsCard() {
+  const entry = OD.entries.find((e) => e.index === 0x2300);
+  const settingBitsField = entry.fields.find((f) => f.name === "settingBits");
+  const switchesEl = document.getElementById("settings-switches");
+  const numericEl = document.getElementById("settings-numeric");
+  switchesEl.innerHTML = "";
+  numericEl.innerHTML = "";
+
+  for (const bit of settingBitsField.bits) {
+    if (bit.kind !== "level") continue;
+    const row = document.createElement("div");
+    row.className = "toggle-row";
+    row.innerHTML = `<span>${bit.label}</span><input type="checkbox" data-mask="${bit.mask}">`;
+    const checkbox = row.querySelector("input");
+    checkbox.addEventListener("change", () => {
+      setBit(0x2300, 4, bit.mask, checkbox.checked, bit.label);
+    });
+    switchesEl.appendChild(row);
+  }
+
+  const glitchPeriod = entry.fields.find((f) => f.name === "glitchPeriod");
+  const imuThreshold = entry.fields.find((f) => f.name === "imuMotionThreshold");
+  const imuDuration = entry.fields.find((f) => f.name === "imuMotionDuration");
+
+  const periodRow = document.createElement("div");
+  periodRow.className = "numeric-row";
+  periodRow.innerHTML = `<span>${glitchPeriod.label} (${glitchPeriod.unit})</span>
+    <input type="number" id="glitch-period-input" min="${glitchPeriod.min}">
+    <button id="apply-glitch-btn">Apply</button>`;
+  numericEl.appendChild(periodRow);
+
+  const imuRow = document.createElement("div");
+  imuRow.className = "numeric-row";
+  imuRow.innerHTML = `<span>${imuThreshold.label} / ${imuDuration.label}</span>
+    <input type="number" id="imu-threshold-input" min="${imuThreshold.min}" max="${imuThreshold.max}" style="width:6ch">
+    <input type="number" id="imu-duration-input" min="${imuDuration.min}" max="${imuDuration.max}" style="width:4ch">
+    <button id="apply-imu-btn">Apply</button>`;
+  numericEl.appendChild(imuRow);
+
+  document.getElementById("apply-glitch-btn").addEventListener("click", async () => {
+    try {
+      const value = parseInt(document.getElementById("glitch-period-input").value, 10);
+      await apiWrite(0x2300, glitchPeriod.subindex, value);
+      await pulseBit(0x2300, 4, 1 << 4, "Apply Glitch Settings");
+    } catch (err) {
+      log(`glitch settings failed: ${err.message}`, "error");
+    }
+  });
+
+  document.getElementById("apply-imu-btn").addEventListener("click", async () => {
+    try {
+      const threshold = parseInt(document.getElementById("imu-threshold-input").value, 10);
+      const duration = parseInt(document.getElementById("imu-duration-input").value, 10);
+      await apiWrite(0x2300, imuThreshold.subindex, threshold);
+      await apiWrite(0x2300, imuDuration.subindex, duration);
+      await pulseBit(0x2300, 4, 1 << 3, "Apply IMU Settings");
+    } catch (err) {
+      log(`IMU settings failed: ${err.message}`, "error");
+    }
+  });
+
+  // Populate current values.
+  (async () => {
+    try {
+      const bits = await apiRead(0x2300, 4);
+      for (const cb of switchesEl.querySelectorAll("input[type=checkbox]")) {
+        cb.checked = (bits & parseInt(cb.dataset.mask, 10)) !== 0;
+      }
+      document.getElementById("glitch-period-input").value = await apiRead(0x2300, glitchPeriod.subindex);
+      document.getElementById("imu-threshold-input").value = await apiRead(0x2300, imuThreshold.subindex);
+      document.getElementById("imu-duration-input").value = await apiRead(0x2300, imuDuration.subindex);
+    } catch (err) {
+      log(`settings read failed: ${err.message}`, "error");
+    }
+  })();
+}
+
+// ---------- Movie-accurate defaults ----------
+
+const MOVIE_DATE_RECORD_TO_INDEX = {
+  destinationTime: 0x2000,
+  presentTime: 0x2001,
+  lastDepartedTime: 0x2002,
+};
+
+document.getElementById("movie-dates-btn").addEventListener("click", async () => {
+  const statusEl = document.getElementById("movie-dates-status");
+  const btn = document.getElementById("movie-dates-btn");
+  btn.disabled = true;
+  statusEl.textContent = "Fetching movie-accurate dates…";
+
+  try {
+    const res = await fetch("/api/movie-dates", { cache: "no-store" });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `fetch failed (${res.status})`);
+    }
+    const dates = await res.json();
+
+    for (const [recordName, index] of Object.entries(MOVIE_DATE_RECORD_TO_INDEX)) {
+      const record = dates[recordName];
+      if (!record) throw new Error(`movie_dates.json is missing "${recordName}"`);
+      const entry = OD.entries.find((e) => e.index === index);
+      for (const f of entry.fields) {
+        const value = record[f.name];
+        if (value === undefined) throw new Error(`movie_dates.json's "${recordName}" is missing "${f.name}"`);
+        await apiWrite(index, f.subindex, value);
+      }
+    }
+
+    statusEl.textContent = "Applying to displays…";
+    await applyAllDisplaysFromOd();
+
+    statusEl.textContent = 'Applied. Click "Read" on each date/time card above to see the new values.';
+    log("Movie-accurate dates applied to destination, present, and last-departed displays.");
+  } catch (err) {
+    statusEl.textContent = `Failed: ${err.message}`;
+    log(`Movie-accurate dates failed: ${err.message}`, "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------- Advanced raw access ----------
+
+document.getElementById("raw-read-btn").addEventListener("click", async () => {
+  try {
+    const index = parseInt(document.getElementById("raw-index").value, 16);
+    const subindex = parseInt(document.getElementById("raw-subindex").value, 10);
+    const value = await apiRead(index, subindex);
+    document.getElementById("raw-value").value = value;
+    log(`read ${index.toString(16)}:${subindex} = ${value}`);
+  } catch (err) {
+    log(`raw read failed: ${err.message}`, "error");
+  }
+});
+
+document.getElementById("raw-write-btn").addEventListener("click", async () => {
+  try {
+    const index = parseInt(document.getElementById("raw-index").value, 16);
+    const subindex = parseInt(document.getElementById("raw-subindex").value, 10);
+    const value = parseInt(document.getElementById("raw-value").value, 10);
+    await apiWrite(index, subindex, value);
+    log(`wrote ${index.toString(16)}:${subindex} = ${value}`);
+  } catch (err) {
+    log(`raw write failed: ${err.message}`, "error");
+  }
+});
+
+// ---------- Init ----------
+
+async function init() {
+  await refreshHealth();
+  setInterval(refreshHealth, 5000);
+
+  const res = await fetch(`${API}/api/od`, { cache: "no-store" });
+  OD = await res.json();
+
+  buildDateTimeCards();
+  buildFunctionControlButtons();
+  buildSettingsCard();
+  connectLiveSocket();
+}
+
+init();

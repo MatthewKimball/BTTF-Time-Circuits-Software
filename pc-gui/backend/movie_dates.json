@@ -1,0 +1,14 @@
+{
+  "_comment": "Movie-accurate default date/times. Edit freely - the web GUI reads this file fresh on every request, no restart needed. Fields: day, month, year, hour (1-12), minute, meridian (1=AM, 2=PM). These match the firmware's compiled-in gDefaultDestinationTime/gDefaultPresentTime/gDefaultLastDepartedTime arrays in App/Time_Circuits/timecircuit_control.c.",
+
+  "destinationTime": {
+    "day": 27, "month": 10, "year": 1985, "hour": 11, "minute": 0, "meridian": 1
+  },
+  "presentTime": {
+    "day": 21, "month": 10, "year": 2015, "hour": 4, "minute": 29, "meridian": 2
+  },
+  "lastDepartedTime": {
+    "_comment": "Nov 12, 1955, 10:04 PM - the exact moment lightning strikes the clock tower",
+    "day": 12, "month": 11, "year": 1955, "hour": 10, "minute": 4, "meridian": 2
+  }
+}

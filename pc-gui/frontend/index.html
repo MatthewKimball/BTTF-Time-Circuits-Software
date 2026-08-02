@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Time Circuits Control Panel</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1>Time Circuits Control Panel</h1>
+  <div class="conn" id="conn">
+    <span class="dot" id="conn-dot"></span>
+    <span id="conn-text">connecting&hellip;</span>
+    <button id="reconnect-btn">Reconnect</button>
+  </div>
+</header>
+
+<main>
+
+  <section class="card" id="status-card">
+    <h2>Live Status</h2>
+    <div class="status-row">
+      <div class="state-display" id="state-display">&mdash;</div>
+      <div class="switches" id="switches">
+        <div class="switch" data-name="glitch"><span class="dot"></span>Glitch</div>
+        <div class="switch" data-name="keypadEnter"><span class="dot"></span>Keypad Enter</div>
+        <div class="switch" data-name="mute"><span class="dot"></span>Mute</div>
+        <div class="switch" data-name="timeTravel"><span class="dot"></span>Time Travel</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" id="state-control-card">
+    <h2>Time Circuits State</h2>
+    <p class="hint">Requests are one-shot: the firmware validates and clears the request bit automatically. Armed requires a valid destination date; Travel requires Armed.</p>
+    <div class="button-row">
+      <button data-state="0">Idle</button>
+      <button data-state="1">Armed</button>
+      <button data-state="2">Travel</button>
+      <button data-state="3">Complete</button>
+    </div>
+  </section>
+
+  <section class="card" id="movie-dates-card">
+    <h2>Movie-Accurate Defaults</h2>
+    <p class="hint">Sets destination, present, and last-departed time to the values in <code>pc-gui/backend/movie_dates.json</code> on the server, then applies them to all three displays and the RTC. Edit that file to change the dates - no restart needed.</p>
+    <div class="button-row">
+      <button id="movie-dates-btn">Apply Movie-Accurate Dates</button>
+    </div>
+    <div class="hint" id="movie-dates-status" style="margin-top: 0.5rem;"></div>
+  </section>
+
+  <section class="datetime-grid" id="datetime-grid"></section>
+
+  <section class="card" id="function-control-card">
+    <h2>Function Control</h2>
+    <p class="hint">One-shot actions. Each button sets a bit that the firmware acts on and clears automatically.</p>
+    <div class="button-row" id="function-control-buttons"></div>
+  </section>
+
+  <section class="card" id="settings-card">
+    <h2>Settings</h2>
+    <div class="settings-body">
+      <div class="settings-switches" id="settings-switches"></div>
+      <div class="settings-numeric" id="settings-numeric"></div>
+    </div>
+  </section>
+
+  <section class="card" id="advanced-card">
+    <h2>Advanced: Raw OD Access</h2>
+    <div class="raw-form">
+      <label>Index <input id="raw-index" type="text" placeholder="0x2300" size="8"></label>
+      <label>Subindex <input id="raw-subindex" type="number" value="0" min="0" max="255" size="4"></label>
+      <label>Value <input id="raw-value" type="text" placeholder="(for write)" size="10"></label>
+      <button id="raw-read-btn">Read</button>
+      <button id="raw-write-btn">Write</button>
+    </div>
+    <pre id="log"></pre>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
