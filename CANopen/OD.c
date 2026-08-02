@@ -71,13 +71,24 @@ OD_ATTR_PERSIST_COMM OD_PERSIST_COMM_t OD_PERSIST_COMM = {
     },
     .x1404_RPDOCommunicationParameter = {
         .highestSub_indexSupported = 0x05,
-        .COB_IDUsedByRPDO = 0x00000615,
+        // Was 0x615 (0x600+nodeID) - collided with the CANopen SDO server's
+        // client-to-server channel, which CANopenNode always forces to
+        // 0x600+nodeID regardless of this value. RPDO5's identical-ID
+        // receive registration shadowed the SDO server's in CANopenNode's
+        // internal dispatch table, so the SDO server was never reachable
+        // over CAN. Reassigned to the unused TPDO2 predefined-connection-set
+        // slot (this device only implements TPDO1).
+        .COB_IDUsedByRPDO = 0x00000295,
         .transmissionType = 0xFF,
         .eventTimer = 0x0000
     },
     .x1405_RPDOCommunicationParameter = {
         .highestSub_indexSupported = 0x05,
-        .COB_IDUsedByRPDO = 0x00000715,
+        // Was 0x715 (0x700+nodeID) - same predefined-connection-set range as
+        // the heartbeat producer's COB-ID. Not a dispatch collision like
+        // RPDO5/SDO (one is Tx, the other Rx), but still ambiguous on the
+        // wire. Reassigned to the unused TPDO3 slot for the same reason.
+        .COB_IDUsedByRPDO = 0x00000395,
         .transmissionType = 0xFF,
         .eventTimer = 0x0000
     },
