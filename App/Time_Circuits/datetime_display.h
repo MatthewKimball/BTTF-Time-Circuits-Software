@@ -70,6 +70,7 @@ DateTime_Display_Status_t dateTime_setLed(DateTime_Display_Config_t* const pConf
        const uint8_t ledState);
 DateTime_Display_Status_t dateTime_clearDisplayExceptColons(DateTime_Display_Config_t* const pConfig);
 DateTime_Display_Status_t dateTime_setRemoteDateTime (const OD_DateTimeRec_t *src, DateTime_Display_Config_t* const dst);
+DateTime_Display_Status_t dateTime_getRemoteDateTime (OD_DateTimeRec_t *dst, const DateTime_Display_Config_t* const src);
 
 
 

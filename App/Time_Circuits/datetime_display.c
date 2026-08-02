@@ -583,4 +583,22 @@ DateTime_Display_Status_t dateTime_setRemoteDateTime (const OD_DateTimeRec_t *sr
   return 1;
   }
 
+// Mirrors a display's live date/time into an OD record (the reverse of
+// dateTime_setRemoteDateTime). Nothing previously kept x2000/x2001/x2002
+// in sync with what's actually on the displays, so a remote SDO/PDO read
+// only ever saw the compiled-in OD.c defaults, never the real present
+// time, a keypad-entered destination time, or the last-departed time set
+// by an actual time travel event.
+DateTime_Display_Status_t dateTime_getRemoteDateTime (OD_DateTimeRec_t *dst, const DateTime_Display_Config_t* const src)
+{
+  dst->day      = src->dateTimeData.Day;
+  dst->month    = src->dateTimeData.Month;
+  dst->year     = src->dateTimeData.Year;
+  dst->hour     = src->dateTimeData.Hour;
+  dst->minute   = src->dateTimeData.Minute;
+  dst->meridian = (uint8_t)src->dateTimeData.Meridiem;
+
+  return 1;
+}
+
 

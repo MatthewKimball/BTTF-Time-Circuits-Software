@@ -183,6 +183,8 @@ TimeCircuit_Control_Status_t timeCircuit_control_getRTCMinute(TimeCircuit_Contro
  static void timeCircuit_processFunctionControl(TimeCircuit_Control_Config_t* const pConfig,
      TimeTravelContext_t *ctx);
  TimeCircuit_Control_Status_t timeCircuit_control_isRemoteDateValid(DateTime_Display_Config_t* pDateTimeDisplayData);
+ static void timeCircuit_syncOdDateTimes(TimeCircuit_Control_Config_t* const pConfig);
+ static void timeCircuit_syncKeypadBufferFromDestination(TimeCircuit_Control_Config_t* const pConfig);
 TimeCircuit_Control_Config_t* timeCircuit_control_init(I2C_HandleTypeDef* const hi2c_display, I2C_HandleTypeDef* const hi2c_rtc,
     RTC_HandleTypeDef* hrtc, I2S_HandleTypeDef* hi2s)
 
@@ -286,7 +288,22 @@ TimeCircuit_Control_Status_t timeCircuit_control_setDefaultDateTimes(TimeCircuit
   }
   pConfig->keypadInputCount = MAXIMUM_DATETIME_INPUT_CHARS;
 
+  timeCircuit_syncOdDateTimes(pConfig);
+
   return isSuccess;
+}
+
+// Mirrors the three displays' live date/time data into the OD (x2000/
+// x2001/x2002), the reverse of timeCircuit_setRemoteDisplayDates(). Nothing
+// previously kept the OD in sync with what's actually on the displays, so a
+// remote SDO/PDO read of these objects only ever returned the compiled-in
+// OD.c defaults - never the real present time, a keypad-entered destination
+// time, or the last-departed time set by an actual time travel event.
+static void timeCircuit_syncOdDateTimes(TimeCircuit_Control_Config_t* const pConfig)
+{
+  dateTime_getRemoteDateTime((OD_DateTimeRec_t*)&OD_RAM.x2000_destinationTime, pConfig->pDestinationTime);
+  dateTime_getRemoteDateTime((OD_DateTimeRec_t*)&OD_RAM.x2001_presentTime, pConfig->pPresentTime);
+  dateTime_getRemoteDateTime((OD_DateTimeRec_t*)&OD_RAM.x2002_lastDepartedTime, pConfig->pLastDepartedTime);
 }
 
 TimeCircuit_Control_Status_t timeCircuit_control_updateDisplays(TimeCircuit_Control_Config_t* const pConfig)
@@ -529,6 +546,7 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateStartUpDateTimes(TimeCirc
       {
       isSuccess &= timeCircuit_control_updateDisplays(pConfig);
       }
+      timeCircuit_syncOdDateTimes(pConfig);
   }
 
   //Set default values if SD Card values not read or invalid
@@ -579,6 +597,9 @@ TimeCircuit_Control_Status_t timeCircuit_control_updatePresentDateTime(TimeCircu
     //Store new date time
     isSuccess &= timeCircuit_control_saveDateTimes(pConfig);
 
+    //Keep the OD's present time in sync so a remote read reflects reality
+    dateTime_getRemoteDateTime((OD_DateTimeRec_t*)&OD_RAM.x2001_presentTime, pConfig->pPresentTime);
+
     previousMinute = pConfig->hRtcTime.Minutes;
   }
 
@@ -612,6 +633,9 @@ TimeCircuit_Control_Status_t timeCircuit_control_executeTimeTravelEvent(TimeCirc
 
       //Store new date time
       isSuccess &= timeCircuit_control_saveDateTimes(pConfig);
+
+      //Keep the OD in sync - present and last-departed both just changed
+      timeCircuit_syncOdDateTimes(pConfig);
 
   return isSuccess;
 }
@@ -681,6 +705,9 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateDestinationDateTime(TimeC
 
         //Save new date times
         timeCircuit_control_saveDateTimes(pConfig);
+
+        //Keep the OD's destination time in sync with the keypad entry
+        dateTime_getRemoteDateTime((OD_DateTimeRec_t*)&OD_RAM.x2000_destinationTime, pConfig->pDestinationTime);
 
         status = TIMECIRCUIT_CONTROL_OK;
       }
@@ -858,7 +885,30 @@ TimeCircuit_Control_Status_t timeCircuit_setRemoteDisplayDates(TimeCircuit_Contr
   dateTime_setRemoteDateTime ((const OD_DateTimeRec_t *)&OD_RAM.x2001_presentTime, pConfig->pPresentTime);
   dateTime_setRemoteDateTime ((const OD_DateTimeRec_t *)&OD_RAM.x2002_lastDepartedTime, pConfig->pLastDepartedTime);
 
+  timeCircuit_syncKeypadBufferFromDestination(pConfig);
+
   return isSuccess;
+}
+
+// Mirrors the destination display's current value into the keypad input
+// buffer, the same way timeCircuit_control_updateStartUpDateTimes() does
+// at boot. Without this, a CAN-triggered destination update only changes
+// pConfig->pDestinationTime - the keypad buffer stays whatever it was
+// before, so a later physical Enter press (without typing anything new)
+// re-validates that stale buffer and overwrites the CAN-set destination
+// right back to the old value.
+static void timeCircuit_syncKeypadBufferFromDestination(TimeCircuit_Control_Config_t* const pConfig)
+{
+  char    writeBuf[MAXIMUM_DATETIME_INPUT_CHARS + 1];
+  uint8_t bufferCount = 0;
+
+  dateTime_convertDateTimeToChar(pConfig->pDestinationTime, writeBuf, sizeof(writeBuf), &bufferCount);
+
+  for (uint8_t characterCount = 0; characterCount < MAXIMUM_DATETIME_INPUT_CHARS; characterCount++)
+  {
+    pConfig->keypadInput[characterCount] = (uint8_t)(writeBuf[characterCount] - '0');
+  }
+  pConfig->keypadInputCount = MAXIMUM_DATETIME_INPUT_CHARS;
 }
 
 static void timeCircuit_processFunctionControl(TimeCircuit_Control_Config_t* const pConfig,
@@ -881,6 +931,7 @@ static void timeCircuit_processFunctionControl(TimeCircuit_Control_Config_t* con
           timeCircuit_control_updateDisplays(pConfig);
           timeCircuit_control_setRtcDateTime(pConfig);
           timeCircuit_control_saveDateTimes(pConfig);
+          osMessageQueuePut(soundQueueHandle, &lockedSound_filename, 0, 0);
          ctx->inputDateValid = true;
        }
        else
@@ -899,6 +950,8 @@ static void timeCircuit_processFunctionControl(TimeCircuit_Control_Config_t* con
       {
         osDelay(DISPLAY_DELAY_MS);
         dateTime_updateDisplay(pConfig->pDestinationTime);
+        osMessageQueuePut(soundQueueHandle, &lockedSound_filename, 0, 0);
+        timeCircuit_syncKeypadBufferFromDestination(pConfig);
         ctx->inputDateValid = true;
       }
       else
