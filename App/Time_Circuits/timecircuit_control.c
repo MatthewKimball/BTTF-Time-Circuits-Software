@@ -13,6 +13,7 @@
 #include "ds3231.h"
 #include "cmsis_os.h"
 #include "gpio.h"
+#include "i2c.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include "301/CO_ODinterface.h"
@@ -79,6 +80,8 @@
 
 
 extern osMessageQueueId_t soundQueueHandle;
+extern volatile bool gColonPending;
+extern volatile uint32_t gColonRequestTick;
 extern StorageDevice_Config_t* gStorageConfig;
 extern volatile bool gGlitchDoubleHit;
 extern bool gSoundMuteSw;
@@ -110,7 +113,7 @@ char keypadSound_Nine_filename[]  = "Dtmf-9.wav";
 char keypadSound_Zero_filename[]  = "Dtmf-0.wav";
 
 char lockedSound_filename[]  = "locked.wav";
-char colonSound_filename[]  = "colon.wav";
+char colonSound_filename[]  = "beep6.wav";
 char gitchSound_filename[]  = "glitch2.wav";
 char enterSound_filename[]  = "enter2.wav";
 
@@ -204,9 +207,30 @@ TimeCircuit_Control_Config_t* timeCircuit_control_init(I2C_HandleTypeDef* const 
   timeCircuit_control_updateStartUpDateTimes(pConfig);
 
 
-  //Enable external RTC
+  // NOTE: external RTC init deliberately does NOT happen here. It's done by
+  // timeCircuit_control_initRTC(), run from its own isolated FreeRTOS task
+  // after the scheduler starts (see StartRtcInitTask). This function runs
+  // synchronously before the scheduler even starts, so any hang here (a
+  // stuck I2C bus, a bad connection) would take down the entire board with
+  // no way to recover - keeping it out entirely means the RTC can fail in
+  // any way whatsoever without affecting displays, keypad, sound, or CAN.
+
+  //Update display with retrieved date times
+  timeCircuit_control_updateDisplays(pConfig);
+
+  return pConfig;
+}
+
+TimeCircuit_Control_Status_t timeCircuit_control_initRTC(TimeCircuit_Control_Config_t * const pConfig)
+{
+  TimeCircuit_Control_Status_t isSuccess = false;
+
   #if defined(SET_EXTERNAL_RTC)
   HAL_GPIO_WritePin( EXT_RTC_RST_GPIO_Port, EXT_RTC_RST_Pin, GPIO_PIN_SET);
+  // Runs in its own isolated task (see StartRtcInitTask), so even if this
+  // recovery attempt itself hangs or has a bug, only this task stalls -
+  // the rest of the system is unaffected either way.
+  I2C2_BusRecovery();
   if(DS3231_Init(pConfig->hi2c_rtc)  == HAL_OK)
   {
     //Retrieve year data
@@ -217,13 +241,15 @@ TimeCircuit_Control_Config_t* timeCircuit_control_init(I2C_HandleTypeDef* const 
 
     //Set present date time to RTC date time
     dateTime_setRtcDateTimeData(pConfig->pPresentTime, &pConfig->hRtcDate, &pConfig->hRtcTime);
+
+    //Refresh just the present-time display now that real RTC data is available
+    dateTime_updateDisplay(pConfig->pPresentTime);
+
+    isSuccess = true;
   }
   #endif
 
-  //Update display with retrieved date times
-  timeCircuit_control_updateDisplays(pConfig);
-
-  return pConfig;
+  return isSuccess;
 }
 
 TimeCircuit_Control_Status_t timeCircuit_control_deInit(TimeCircuit_Control_Config_t* const pConfig)
@@ -406,7 +432,20 @@ TimeCircuit_Control_Status_t timeCircuit_control_getRTCMinute(TimeCircuit_Contro
   #if defined(SET_INTERNAL_RTC)
   isSuccess &= HAL_RTC_GetTime(pConfig->hrtc, &pConfig->hRtcTime, RTC_FORMAT_BIN);
   #elif defined(SET_EXTERNAL_RTC)
-    isSuccess &= DS3231_GetDateTime(pConfig->hi2c_rtc, &pConfig->hRtcTime, &pConfig->hRtcDate);
+    HAL_StatusTypeDef rtcStatus = DS3231_GetDateTime(pConfig->hi2c_rtc, &pConfig->hRtcTime, &pConfig->hRtcDate);
+    isSuccess &= (rtcStatus == HAL_OK);
+
+    if (rtcStatus != HAL_OK) {
+      // Bus may be wedged (e.g. battery-backed RTC left holding it after a
+      // power cycle). Recover and retry, but rate-limited so a genuinely
+      // disconnected/dead RTC doesn't get bit-banged every single cycle.
+      static uint32_t lastRecoveryTick = 0;
+      if ((HAL_GetTick() - lastRecoveryTick) > 5000) {
+        lastRecoveryTick = HAL_GetTick();
+        I2C2_BusRecovery();
+        isSuccess = (DS3231_GetDateTime(pConfig->hi2c_rtc, &pConfig->hRtcTime, &pConfig->hRtcDate) == HAL_OK);
+      }
+    }
   #endif
 
   *currentMinutes = pConfig->hRtcTime.Minutes;
@@ -775,10 +814,10 @@ TimeCircuit_Control_Status_t timeCircuit__toggleTimeColon(TimeCircuit_Control_Co
     isSuccess |= dateTime_setLed(pConfig->pPresentTime,       COLON_LED_SEGMENT_ADDRESS, (toogleStatus<<6));
 
     //Play sound
-//    if (toogleStatus == 3) {
-//
-//      osMessageQueuePut(soundQueueHandle, &colonSound_filename, 0, 0);
-//    }
+    if ((toogleStatus == 3) && !gSoundRemoteMuteColon && !gSoundMuteSw) {
+      gColonPending = true;
+      gColonRequestTick = HAL_GetTick();
+    }
 
   }
 

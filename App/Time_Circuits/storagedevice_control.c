@@ -14,8 +14,11 @@ struct StorageDevice_Config_Tag
   //StorageDevice_Config_t * pStorageDeviceConfig;
   SPI_HandleTypeDef * hspi;
 
-  FATFS   FatFs;  //Fatfs handle
-  FIL     fil;    //File handle
+  FATFS   FatFs;    //Fatfs handle
+  FIL     fil;      //File handle used for general (non-audio) file access, e.g. saved date/time
+  FIL     filSound; //Dedicated file handle for the sound task's WAV streaming, kept separate so a
+                     //concurrent save on `fil` from another task can never clobber an in-progress
+                     //audio file object
   FRESULT fres;   //Result after operation
   DWORD   free_clusters;
   DWORD   free_sectors;
@@ -26,11 +29,12 @@ struct StorageDevice_Config_Tag
 
 //Private Function Definitions
 StorageDevice_Status_t storageDevice_closeFile(StorageDevice_Config_t * pConfig);
+static StorageDevice_Status_t storageDevice_openSoundFile(StorageDevice_Config_t * pConfig, TCHAR* const filename, BYTE mode);
 
 
 StorageDevice_Config_t* storageDevice_init(SPI_HandleTypeDef * hspi)
 {
-  StorageDevice_Config_t* pConfig = malloc(sizeof(StorageDevice_Config_t));
+  StorageDevice_Config_t* pConfig = calloc(1, sizeof(StorageDevice_Config_t));
   pConfig->hspi = hspi;
 
 //  storageDevice_demountDrive(pConfig);
@@ -81,6 +85,7 @@ StorageDevice_Status_t storageDevice_demountDrive(StorageDevice_Config_t * pConf
   StorageDevice_Status_t isSuccess = false;
 
   storageDevice_closeFile(pConfig);
+  storageDevice_closeSoundFile(pConfig);
 
   f_mount(NULL, "", 0);
 
@@ -113,6 +118,36 @@ StorageDevice_Status_t storageDevice_closeFile(StorageDevice_Config_t * pConfig)
   return isSuccess;
 }
 
+volatile uint32_t gDbgPlaySoundCallCount = 0;
+volatile FRESULT  gDbgOpenFres  = 0;
+volatile FRESULT  gDbgLseekFres = 0;
+volatile FRESULT  gDbgReadFres  = 0;
+volatile FRESULT  gDbgCloseFres = 0;
+
+static StorageDevice_Status_t storageDevice_openSoundFile(StorageDevice_Config_t * pConfig, TCHAR* const filename, BYTE mode)
+{
+  StorageDevice_Status_t isSuccess = true;
+
+  gDbgPlaySoundCallCount++;
+  pConfig->fres = f_open(&pConfig->filSound, filename, mode);
+  gDbgOpenFres = pConfig->fres;
+  if (pConfig->fres != FR_OK) {
+    isSuccess = false;
+  }
+
+  return isSuccess;
+}
+
+StorageDevice_Status_t storageDevice_closeSoundFile(StorageDevice_Config_t * pConfig)
+{
+  StorageDevice_Status_t isSuccess = true;
+
+  pConfig->fres = f_close(&pConfig->filSound);
+  gDbgCloseFres = pConfig->fres;
+
+  return isSuccess;
+}
+
 StorageDevice_Status_t storageDevice_readFile(StorageDevice_Config_t * pConfig, char* readBuf,
     const uint8_t bufferSize, const char* const filename)
 {
@@ -136,13 +171,13 @@ StorageDevice_Status_t storageDevice_readWavDataSize(StorageDevice_Config_t * pC
 {
   StorageDevice_Status_t isSuccess = false;
 
-  isSuccess = storageDevice_openFile(pConfig, (TCHAR*)filename, FA_READ);
+  isSuccess = storageDevice_openSoundFile(pConfig, (TCHAR*)filename, FA_READ);
 
-  pConfig->fres = f_lseek(&pConfig->fil, 40);
+  pConfig->fres = f_lseek(&pConfig->filSound, 40);
+  gDbgLseekFres = pConfig->fres;
 
-  pConfig->fres = f_read(&pConfig->fil, pRecordingSize, 4, (UINT *) pPlayedSize);
-
-  *pRecordingSize /= 2;
+  pConfig->fres = f_read(&pConfig->filSound, pRecordingSize, 4, (UINT *) pPlayedSize);
+  gDbgReadFres = pConfig->fres;
 
   return isSuccess;
 }
@@ -152,7 +187,7 @@ StorageDevice_Status_t storageDevice_readFileData(StorageDevice_Config_t * pConf
 {
   StorageDevice_Status_t isSuccess = false;
 
-  pConfig->fres = f_read(&pConfig->fil, dataBuffer, (UINT) bytesToRead, (UINT *) pBytesRead);
+  pConfig->fres = f_read(&pConfig->filSound, dataBuffer, (UINT) bytesToRead, (UINT *) pBytesRead);
 
   return isSuccess;
 }

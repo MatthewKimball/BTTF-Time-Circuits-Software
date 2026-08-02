@@ -7,7 +7,6 @@
 #include <datetime_display.h>
 
 
-
 //7 Segment Wiring Order
 static const uint8_t digitSegmentOrder[] = {
     8,  /* Day Digit 1    */
@@ -103,8 +102,6 @@ struct DateTime_Display_Config_Tag
   uint8_t                   i2cAddrs;
   Ht16k33_Config_t*         hDisplayDriver;
   DateTime_DisplayData_t    dateTimeData;
-
-  uint16_t                  orignalYear;
 
 } DateTime_Display_Config;
 
@@ -246,13 +243,12 @@ DateTime_Display_Status_t   dateTime_getRtcDateTimeData(DateTime_Display_Config_
 
   pRtcDate->Date        = pConfig->dateTimeData.Day;
   pRtcDate->Month       = pConfig->dateTimeData.Month;
-  pRtcDate->Year        = 0;                            //Set to zero because maximum value from RTC is 99 years
+  pRtcDate->Year        = pConfig->dateTimeData.Year % 100; // low 2 digits only - the DS3231 can't store more
   pRtcTime->Hours       = pConfig->dateTimeData.Hour;
   pRtcTime->Minutes     = pConfig->dateTimeData.Minute;
   pRtcTime->TimeFormat  = pConfig->dateTimeData.Meridiem - 1; //RTC AM = 0, RTC PM = 1;
   pRtcTime->Seconds     = 0;
   pRtcTime->SubSeconds  = 0;
-  pConfig->orignalYear  = pConfig->dateTimeData.Year; //Hacky way to fix RTC year issue
   return isSuccess;
 }
 
@@ -261,9 +257,39 @@ DateTime_Display_Status_t   dateTime_setRtcDateTimeData(DateTime_Display_Config_
 {
   DateTime_Display_Status_t isSuccess = 1;
 
+  // A valid 2-digit BCD year can only ever be 0-99. A corrupted I2C
+  // transaction (confirmed happening on the very first read right after
+  // boot, when several peripherals are initializing simultaneously) can
+  // hand back a garbage value outside that range - if trusted, it corrupts
+  // the tracked century permanently, since the rollover logic below has no
+  // way to tell "the base was already wrong" apart from a real rollover.
+  // Reject the whole reading and keep the previous value rather than build
+  // on a known-bad foundation; the next read will very likely be valid.
+  if (pRtcDate->Year > 99) {
+    return 0;
+  }
+
   pConfig->dateTimeData.Day       = pRtcDate->Date;
   pConfig->dateTimeData.Month     = pRtcDate->Month;
-  pConfig->dateTimeData.Year      = pConfig->orignalYear + pRtcDate->Year;  //Add years because maximum value from RTC is 99 years
+
+  // The DS3231 only stores the low 2 digits of the year, but a time-traveled
+  // "present time" can be anywhere from 0-9999. Track the higher digits by
+  // detecting rollovers rather than adding a remembered offset - the full
+  // value rides along with the existing SD card save/restore of
+  // dateTimeData.Year, so it survives reboots correctly and still supports
+  // an arbitrary time-travel destination year.
+  //
+  // A genuine rollover can only ever go from exactly 99 to exactly 0 - it
+  // can't skip. Require that exact transition rather than "any decrease",
+  // since a single transient bad I2C reading (e.g. during the simultaneous
+  // peripheral init right at boot) could otherwise read back smaller than
+  // expected and falsely be mistaken for a century rollover.
+  uint16_t previousLow2Digits = pConfig->dateTimeData.Year % 100;
+  uint16_t century            = pConfig->dateTimeData.Year / 100;
+  if (previousLow2Digits == 99 && pRtcDate->Year == 0) {
+    century++;
+  }
+  pConfig->dateTimeData.Year      = (century * 100) + pRtcDate->Year;
   pConfig->dateTimeData.Hour      = pRtcTime->Hours;
   pConfig->dateTimeData.Minute    = pRtcTime->Minutes;
   pConfig->dateTimeData.Meridiem  = pRtcTime->TimeFormat + 1; //RTC AM = 0, RTC PM = 1;

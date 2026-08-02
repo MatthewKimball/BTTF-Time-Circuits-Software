@@ -43,6 +43,7 @@ typedef enum {
 
 TimeCircuit_Control_Config_t* timeCircuit_control_init(I2C_HandleTypeDef* const hi2c_display,
     I2C_HandleTypeDef* const hi2c_rtc, RTC_HandleTypeDef* hrtc, I2S_HandleTypeDef* hi2s);
+TimeCircuit_Control_Status_t  timeCircuit_control_initRTC(TimeCircuit_Control_Config_t* const pConfig);
 TimeCircuit_Control_Status_t  timeCircuit_control_update(TimeCircuit_Control_Config_t* const pConfig);
 TimeCircuit_Control_Status_t  timeCircuit_control_setDefaultDisplays(TimeCircuit_Control_Config_t * const pConfig);
 TimeCircuit_Control_Status_t  timeCircuit_control_updateStartUpDateTimes(TimeCircuit_Control_Config_t * const pConfig);

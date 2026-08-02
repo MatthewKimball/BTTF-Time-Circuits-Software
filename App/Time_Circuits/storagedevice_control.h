@@ -30,6 +30,7 @@ StorageDevice_Status_t storageDevice_readWavDataSize(StorageDevice_Config_t * pC
 StorageDevice_Status_t storageDevice_readFileData(StorageDevice_Config_t * pConfig, uint16_t* dataBuffer,
     uint32_t bytesToRead, uint32_t* pBytesRead);
 StorageDevice_Status_t storageDevice_closeFile(StorageDevice_Config_t * pConfig);
+StorageDevice_Status_t storageDevice_closeSoundFile(StorageDevice_Config_t * pConfig);
 
 StorageDevice_Status_t storageDevice_deInit();
 
