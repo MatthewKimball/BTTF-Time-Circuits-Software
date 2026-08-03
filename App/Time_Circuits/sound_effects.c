@@ -92,18 +92,33 @@ void soundEffects_deinit(SoundEffects_Config_t* pSoundEffectConfig)
 void soundEffects_disableAmplifier(void)
 {
   static bool previousState = false;
-  if (previousState != gSoundRemoteMuteAll)
-  {
-    //HAL_GPIO_WritePin(AMPLIFIER_SHUTDOWN_GPIO_PORT, AMPLIFIER_SHUTDOWN_PIN, gSoundRemoteMuteAll);
-    previousState = gSoundRemoteMuteAll;
-  }
 
+  // Only the remote mute-all bit controls this - the physical Mute switch
+  // is intentionally scoped to just the colon tick sound
+  // (!gSoundRemoteMuteColon && !gSoundMuteSw, elsewhere), not general
+  // playback. Previously the GPIO write here was commented out entirely,
+  // so remote mute-all silently did nothing.
+  bool muteRequested = gSoundRemoteMuteAll;
+
+  if (previousState != muteRequested)
+  {
+    // SET = amp enabled/unmuted, RESET = amp disabled/muted - matches the
+    // convention already used around DMA start/stop in
+    // soundEffects_playSound()/soundEffects_update().
+    HAL_GPIO_WritePin(AMPLIFIER_SHUTDOWN_GPIO_PORT, AMPLIFIER_SHUTDOWN_PIN,
+        muteRequested ? GPIO_PIN_RESET : GPIO_PIN_SET);
+    previousState = muteRequested;
+  }
 }
 
 void soundEffects_readMuteSwitch(void)
 {
-  gSoundMuteSw = HAL_GPIO_ReadPin(MUTE_SWITCH_GPIO_PORT, MUTE_SWITCH_PIN);
-
+  // Same electrical setup (GPIO_MODE_INPUT, GPIO_NOPULL) as the Glitch and
+  // Keypad Enter switches, both of which invert their reading - this one
+  // didn't, so it read backwards: HIGH (the switch's normal resting state,
+  // confirmed live at GPIOC->IDR bit10) was taken as "mute requested",
+  // permanently muting all sound regardless of the Mute switch or Mute All.
+  gSoundMuteSw = !HAL_GPIO_ReadPin(MUTE_SWITCH_GPIO_PORT, MUTE_SWITCH_PIN);
 }
 
 
@@ -143,8 +158,17 @@ SoundEffects_Status_t soundEffects_playSound(SoundEffects_Config_t* pCfg,
     gIsPlaying = true;
     HAL_I2S_Transmit_DMA(pCfg->hi2s, gSamples, 4096);  // count in 16-bit samples
     // Unmute now that real audio is flowing again - masks any residual
-    // glitch from the DMA stop/restart transition itself.
-    HAL_GPIO_WritePin(AMPLIFIER_SHUTDOWN_GPIO_PORT, AMPLIFIER_SHUTDOWN_PIN, GPIO_PIN_SET);
+    // glitch from the DMA stop/restart transition itself. Only if remote
+    // mute-all isn't asking to stay muted, though: this used to run
+    // unconditionally, so starting ANY sound (e.g. a keypad tone) silently
+    // re-enabled the amplifier even while Mute All was engaged, defeating
+    // it - soundEffects_disableAmplifier() would mute again on its next
+    // 20ms tick, but by then the click/pop had already played audibly.
+    // The physical Mute switch (gSoundMuteSw) is deliberately not checked
+    // here - it only scopes the colon tick sound, not general playback.
+    if (!gSoundRemoteMuteAll) {
+      HAL_GPIO_WritePin(AMPLIFIER_SHUTDOWN_GPIO_PORT, AMPLIFIER_SHUTDOWN_PIN, GPIO_PIN_SET);
+    }
     return 1;
 }
 

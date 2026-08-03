@@ -1095,6 +1095,13 @@ TimeCircuit_Control_Status_t timeCircuit_control_update(TimeCircuit_Control_Conf
 
   // --- Always-on updates ---
   timeCircuit_control_updatePresentDateTime(pConfig);  // RTC must always run
+  // Translates OD_RAM.x2300_settingParameters.settingBits into
+  // gGlitchRemoteEnable/gSoundRemoteMuteColon/gSoundRemoteMuteAll - this was
+  // implemented but never actually called from anywhere, so none of the
+  // remote glitch/mute settings had any effect no matter what was written
+  // to the OD. Must run before updateGlitch() below, which reads
+  // gGlitchRemoteEnable the same iteration.
+  timeCircuit_control_ProcessSettingBits();
   timeCircuit_control_updateGlitch(pConfig);           // Optional always-on glitch
   timeCircuit_control_readTimeTravelSwitch(pConfig);   // Read Time Travel Switch
 
@@ -1191,8 +1198,8 @@ TimeCircuit_Control_Status_t timeCircuit_control_update(TimeCircuit_Control_Conf
   timeCircuit_processFunctionControl(pConfig, &ctx);
 
   //Update Sound Effect Control Settings
-   soundEffects_disableAmplifier();
    soundEffects_readMuteSwitch();
+   soundEffects_disableAmplifier();
 
 
   return TIMECIRCUIT_CONTROL_OK;
