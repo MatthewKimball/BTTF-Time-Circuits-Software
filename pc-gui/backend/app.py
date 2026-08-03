@@ -36,6 +36,7 @@ NODE_ID = int(os.environ.get("TC_CAN_NODE_ID", "21"))
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 MOVIE_DATES_PATH = Path(__file__).resolve().parent / "movie_dates.json"
+HISTORICAL_DATES_PATH = Path(__file__).resolve().parent / "historical_dates.json"
 
 app = FastAPI(title="Time Circuits Control Panel")
 
@@ -131,6 +132,22 @@ def movie_dates():
         raise HTTPException(status_code=404, detail=f"{MOVIE_DATES_PATH} not found") from exc
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=500, detail=f"{MOVIE_DATES_PATH} is not valid JSON: {exc}") from exc
+
+
+@app.get("/api/historical-dates")
+def historical_dates():
+    """
+    Historically significant date/times for the Randomiser, read fresh from
+    historical_dates.json on every call (no caching) so edits to that file
+    take effect immediately - no server restart needed.
+    """
+    try:
+        with open(HISTORICAL_DATES_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=f"{HISTORICAL_DATES_PATH} not found") from exc
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=500, detail=f"{HISTORICAL_DATES_PATH} is not valid JSON: {exc}") from exc
 
 
 @app.get("/api/read")

@@ -42,13 +42,24 @@
     </div>
   </section>
 
-  <section class="card" id="movie-dates-card">
-    <h2>Movie-Accurate Defaults</h2>
-    <p class="hint">Sets destination, present, and last-departed time to the values in <code>pc-gui/backend/movie_dates.json</code> on the server, then applies them to all three displays and the RTC. Edit that file to change the dates - no restart needed.</p>
-    <div class="button-row">
-      <button id="movie-dates-btn">Apply Movie-Accurate Dates</button>
+  <section class="datetime-grid" id="quick-actions-grid">
+    <div class="card" id="movie-dates-card">
+      <h2>Movie-Accurate Defaults</h2>
+      <p class="hint">Resets destination, present, and last-departed time to movie-accurate dates.</p>
+      <div class="button-row">
+        <button id="movie-dates-btn">Update</button>
+      </div>
+      <div class="hint" id="movie-dates-status" style="margin-top: 0.5rem;"></div>
     </div>
-    <div class="hint" id="movie-dates-status" style="margin-top: 0.5rem;"></div>
+
+    <div class="card" id="randomiser-card">
+      <h2>Randomiser</h2>
+      <p class="hint">Sets the destination time to a random moment from history.</p>
+      <div class="button-row">
+        <button id="randomiser-btn">Update</button>
+      </div>
+      <div class="hint" id="randomiser-status" style="margin-top: 0.5rem;"></div>
+    </div>
   </section>
 
   <section class="datetime-grid" id="datetime-grid"></section>
@@ -56,15 +67,12 @@
   <section class="card" id="function-control-card">
     <h2>Function Control</h2>
     <p class="hint">One-shot actions. Each button sets a bit that the firmware acts on and clears automatically.</p>
-    <div class="button-row" id="function-control-buttons"></div>
+    <div class="settings-group" id="function-control-buttons"></div>
   </section>
 
   <section class="card" id="settings-card">
     <h2>Settings</h2>
-    <div class="settings-body">
-      <div class="settings-switches" id="settings-switches"></div>
-      <div class="settings-numeric" id="settings-numeric"></div>
-    </div>
+    <div class="settings-body" id="settings-body"></div>
   </section>
 
   <section class="card" id="advanced-card">

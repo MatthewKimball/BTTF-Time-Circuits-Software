@@ -265,20 +265,27 @@ function buildDateTimeCards() {
       });
       actionsEl.appendChild(applyBtn);
 
-      const tzLabel = document.createElement("label");
-      tzLabel.style.marginRight = "0.5rem";
-      tzLabel.innerHTML = `Timezone <select id="realtime-tz-select">${TZ_OPTIONS_HTML}</select>`;
-      actionsEl.appendChild(tzLabel);
-
+      const syncGroup = document.createElement("div");
+      syncGroup.className = "settings-group sync-group";
+      syncGroup.innerHTML = `<h3>Sync to Timezone</h3>
+        <div class="numeric-row">
+          <span>Timezone</span>
+          <select id="realtime-tz-select">${TZ_OPTIONS_HTML}</select>
+        </div>`;
       const syncBtn = document.createElement("button");
-      syncBtn.textContent = "Sync to Real Time";
-      syncBtn.title = "Fetch accurate current time for the selected timezone and apply it exactly on the next :00 mark";
-      actionsEl.appendChild(syncBtn);
+      syncBtn.textContent = "Sync";
+      syncBtn.title = "Fetch the current time for the selected timezone and apply it exactly on the next :00 mark";
+      syncGroup.appendChild(syncBtn);
+      card.appendChild(syncGroup);
 
+      const localGroup = document.createElement("div");
+      localGroup.className = "settings-group sync-group";
+      localGroup.innerHTML = `<h3>Sync to My Timezone</h3>`;
       const detectBtn = document.createElement("button");
-      detectBtn.textContent = "Update to My Local Timezone";
+      detectBtn.textContent = "Sync";
       detectBtn.title = "Detect this browser's local timezone and sync to it exactly on the next :00 mark";
-      actionsEl.appendChild(detectBtn);
+      localGroup.appendChild(detectBtn);
+      card.appendChild(localGroup);
 
       const statusEl = document.createElement("div");
       statusEl.className = "hint";
@@ -520,10 +527,14 @@ function buildFunctionControlButtons() {
   const container = document.getElementById("function-control-buttons");
   container.innerHTML = "";
   for (const bit of entry.fields[0].bits) {
+    const row = document.createElement("div");
+    row.className = "toggle-row";
     const btn = document.createElement("button");
-    btn.textContent = bit.label;
+    btn.textContent = "Run";
     btn.addEventListener("click", () => pulseBit(0x2200, 0, bit.mask, bit.label));
-    container.appendChild(btn);
+    row.innerHTML = `<span>${bit.label}</span>`;
+    row.appendChild(btn);
+    container.appendChild(row);
   }
 }
 
@@ -532,43 +543,64 @@ function buildFunctionControlButtons() {
 function buildSettingsCard() {
   const entry = OD.entries.find((e) => e.index === 0x2300);
   const settingBitsField = entry.fields.find((f) => f.name === "settingBits");
-  const switchesEl = document.getElementById("settings-switches");
-  const numericEl = document.getElementById("settings-numeric");
-  switchesEl.innerHTML = "";
-  numericEl.innerHTML = "";
-
-  for (const bit of settingBitsField.bits) {
-    if (bit.kind !== "level") continue;
-    const row = document.createElement("div");
-    row.className = "toggle-row";
-    row.innerHTML = `<span>${bit.label}</span><input type="checkbox" data-mask="${bit.mask}">`;
-    const checkbox = row.querySelector("input");
-    checkbox.addEventListener("change", () => {
-      setBit(0x2300, 4, bit.mask, checkbox.checked, bit.label);
-    });
-    switchesEl.appendChild(row);
-  }
-
+  const bitsByName = Object.fromEntries(settingBitsField.bits.map((b) => [b.name, b]));
   const glitchPeriod = entry.fields.find((f) => f.name === "glitchPeriod");
   const imuThreshold = entry.fields.find((f) => f.name === "imuMotionThreshold");
   const imuDuration = entry.fields.find((f) => f.name === "imuMotionDuration");
 
-  const periodRow = document.createElement("div");
-  periodRow.className = "numeric-row";
-  periodRow.innerHTML = `<span>${glitchPeriod.label} (${glitchPeriod.unit})</span>
-    <input type="number" id="glitch-period-input" min="${glitchPeriod.min}">
-    <button id="apply-glitch-btn">Apply</button>`;
-  numericEl.appendChild(periodRow);
+  const bodyEl = document.getElementById("settings-body");
+  bodyEl.innerHTML = "";
 
-  const imuRow = document.createElement("div");
-  imuRow.className = "numeric-row";
-  imuRow.innerHTML = `<span>${imuThreshold.label} / ${imuDuration.label}</span>
-    <input type="number" id="imu-threshold-input" min="${imuThreshold.min}" max="${imuThreshold.max}" style="width:6ch">
-    <input type="number" id="imu-duration-input" min="${imuDuration.min}" max="${imuDuration.max}" style="width:4ch">
-    <button id="apply-imu-btn">Apply</button>`;
-  numericEl.appendChild(imuRow);
+  function toggleRow(bit) {
+    const row = document.createElement("div");
+    row.className = "toggle-row";
+    row.innerHTML = `<span>${bit.label}</span><input type="checkbox" data-mask="${bit.mask}">`;
+    row.querySelector("input").addEventListener("change", (ev) => {
+      setBit(0x2300, 4, bit.mask, ev.target.checked, bit.label);
+    });
+    return row;
+  }
 
-  document.getElementById("apply-glitch-btn").addEventListener("click", async () => {
+  function numericRow(field, inputId) {
+    const label = field.unit ? `${field.label} (${field.unit})` : field.label;
+    const row = document.createElement("div");
+    row.className = "numeric-row";
+    row.innerHTML = `<span>${label}</span>
+      <input type="number" id="${inputId}" min="${field.min ?? ""}" max="${field.max ?? ""}">`;
+    return row;
+  }
+
+  // ---- Glitch ----
+  const glitchGroup = document.createElement("div");
+  glitchGroup.className = "settings-group";
+  glitchGroup.innerHTML = "<h3>Glitch</h3>";
+  glitchGroup.appendChild(toggleRow(bitsByName.glitchEnable));
+  glitchGroup.appendChild(numericRow(glitchPeriod, "glitch-period-input"));
+  const glitchApplyBtn = document.createElement("button");
+  glitchApplyBtn.textContent = "Apply";
+  glitchGroup.appendChild(glitchApplyBtn);
+  bodyEl.appendChild(glitchGroup);
+
+  // ---- Sound Effects ----
+  const soundGroup = document.createElement("div");
+  soundGroup.className = "settings-group";
+  soundGroup.innerHTML = "<h3>Sound Effects</h3>";
+  soundGroup.appendChild(toggleRow(bitsByName.muteAll));
+  soundGroup.appendChild(toggleRow(bitsByName.muteColonSound));
+  bodyEl.appendChild(soundGroup);
+
+  // ---- IMU ----
+  const imuGroup = document.createElement("div");
+  imuGroup.className = "settings-group";
+  imuGroup.innerHTML = "<h3>IMU</h3>";
+  imuGroup.appendChild(numericRow(imuThreshold, "imu-threshold-input"));
+  imuGroup.appendChild(numericRow(imuDuration, "imu-duration-input"));
+  const imuApplyBtn = document.createElement("button");
+  imuApplyBtn.textContent = "Apply";
+  imuGroup.appendChild(imuApplyBtn);
+  bodyEl.appendChild(imuGroup);
+
+  glitchApplyBtn.addEventListener("click", async () => {
     try {
       const value = parseInt(document.getElementById("glitch-period-input").value, 10);
       await apiWrite(0x2300, glitchPeriod.subindex, value);
@@ -578,7 +610,7 @@ function buildSettingsCard() {
     }
   });
 
-  document.getElementById("apply-imu-btn").addEventListener("click", async () => {
+  imuApplyBtn.addEventListener("click", async () => {
     try {
       const threshold = parseInt(document.getElementById("imu-threshold-input").value, 10);
       const duration = parseInt(document.getElementById("imu-duration-input").value, 10);
@@ -594,7 +626,7 @@ function buildSettingsCard() {
   (async () => {
     try {
       const bits = await apiRead(0x2300, 4);
-      for (const cb of switchesEl.querySelectorAll("input[type=checkbox]")) {
+      for (const cb of bodyEl.querySelectorAll("input[type=checkbox]")) {
         cb.checked = (bits & parseInt(cb.dataset.mask, 10)) !== 0;
       }
       document.getElementById("glitch-period-input").value = await apiRead(0x2300, glitchPeriod.subindex);
@@ -647,6 +679,44 @@ document.getElementById("movie-dates-btn").addEventListener("click", async () =>
   } catch (err) {
     statusEl.textContent = `Failed: ${err.message}`;
     log(`Movie-accurate dates failed: ${err.message}`, "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------- Randomiser ----------
+
+document.getElementById("randomiser-btn").addEventListener("click", async () => {
+  const statusEl = document.getElementById("randomiser-status");
+  const btn = document.getElementById("randomiser-btn");
+  btn.disabled = true;
+  statusEl.textContent = "Picking a moment in history…";
+
+  try {
+    const res = await fetch("/api/historical-dates", { cache: "no-store" });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `fetch failed (${res.status})`);
+    }
+    const { dates } = await res.json();
+    if (!dates || dates.length === 0) throw new Error("historical_dates.json has no entries");
+
+    const pick = dates[Math.floor(Math.random() * dates.length)];
+    const entry = OD.entries.find((e) => e.index === 0x2000);
+    for (const f of entry.fields) {
+      const value = pick[f.name];
+      if (value === undefined) throw new Error(`historical_dates.json entry is missing "${f.name}"`);
+      await apiWrite(0x2000, f.subindex, value);
+    }
+
+    statusEl.textContent = "Applying to destination display…";
+    await pulseBit(0x2200, 0, 1 << 3, "Update Destination Date");
+
+    statusEl.textContent = `Set destination to: ${pick.label}.`;
+    log(`Randomiser set destination time to: ${pick.label}`);
+  } catch (err) {
+    statusEl.textContent = `Failed: ${err.message}`;
+    log(`Randomiser failed: ${err.message}`, "error");
   } finally {
     btn.disabled = false;
   }

@@ -1,0 +1,32 @@
+{
+  "_comment": "Historically significant moments for the Randomiser. Edit freely - the web GUI reads this file fresh on every request, no restart needed. Fields per entry: label, day, month, year, hour (1-12), minute, meridian (1=AM, 2=PM). Where an exact time isn't historically recorded, noon is used as a placeholder.",
+
+  "dates": [
+    { "label": "Wright Brothers' first powered flight, Kitty Hawk", "day": 17, "month": 12, "year": 1903, "hour": 10, "minute": 35, "meridian": 1 },
+    { "label": "RMS Titanic sinks", "day": 15, "month": 4, "year": 1912, "hour": 2, "minute": 20, "meridian": 1 },
+    { "label": "Armistice ends WWI", "day": 11, "month": 11, "year": 1918, "hour": 11, "minute": 0, "meridian": 1 },
+    { "label": "Wall Street Crash - Black Tuesday", "day": 29, "month": 10, "year": 1929, "hour": 12, "minute": 0, "meridian": 2 },
+    { "label": "D-Day landings begin, Normandy", "day": 6, "month": 6, "year": 1944, "hour": 6, "minute": 30, "meridian": 1 },
+    { "label": "V-E Day - Germany surrenders", "day": 8, "month": 5, "year": 1945, "hour": 12, "minute": 0, "meridian": 2 },
+    { "label": "Declaration of Indian Independence", "day": 15, "month": 8, "year": 1947, "hour": 12, "minute": 0, "meridian": 1 },
+    { "label": "Sputnik 1 launched", "day": 4, "month": 10, "year": 1957, "hour": 10, "minute": 28, "meridian": 2 },
+    { "label": "Berlin Wall construction begins", "day": 13, "month": 8, "year": 1961, "hour": 12, "minute": 0, "meridian": 1 },
+    { "label": "\"I Have a Dream\" speech, Washington D.C.", "day": 28, "month": 8, "year": 1963, "hour": 3, "minute": 0, "meridian": 2 },
+    { "label": "JFK assassinated, Dallas", "day": 22, "month": 11, "year": 1963, "hour": 12, "minute": 30, "meridian": 2 },
+    { "label": "Apollo 11 Moon landing", "day": 20, "month": 7, "year": 1969, "hour": 4, "minute": 17, "meridian": 2 },
+    { "label": "Neil Armstrong's first step on the Moon", "day": 20, "month": 7, "year": 1969, "hour": 10, "minute": 56, "meridian": 2 },
+    { "label": "Fall of the Berlin Wall", "day": 9, "month": 11, "year": 1989, "hour": 11, "minute": 0, "meridian": 2 },
+    { "label": "Nelson Mandela released from prison", "day": 11, "month": 2, "year": 1990, "hour": 4, "minute": 15, "meridian": 2 },
+    { "label": "World Wide Web goes public", "day": 6, "month": 8, "year": 1991, "hour": 12, "minute": 0, "meridian": 2 },
+    { "label": "Fall of the Soviet Union", "day": 26, "month": 12, "year": 1991, "hour": 12, "minute": 0, "meridian": 2 },
+    { "label": "Hong Kong handover to China", "day": 1, "month": 7, "year": 1997, "hour": 12, "minute": 0, "meridian": 1 },
+    { "label": "Fall of the Roman Empire (Western)", "day": 4, "month": 9, "year": 476, "hour": 12, "minute": 0, "meridian": 2 },
+    { "label": "Signing of the Magna Carta, Runnymede", "day": 15, "month": 6, "year": 1215, "hour": 12, "minute": 0, "meridian": 2 },
+    { "label": "Fall of Constantinople", "day": 29, "month": 5, "year": 1453, "hour": 1, "minute": 0, "meridian": 1 },
+    { "label": "Signing of the U.S. Declaration of Independence", "day": 4, "month": 7, "year": 1776, "hour": 12, "minute": 0, "meridian": 2 },
+    { "label": "Storming of the Bastille, Paris", "day": 14, "month": 7, "year": 1789, "hour": 12, "minute": 0, "meridian": 2 },
+    { "label": "Battle of Waterloo begins", "day": 18, "month": 6, "year": 1815, "hour": 11, "minute": 0, "meridian": 1 },
+    { "label": "Abraham Lincoln's Gettysburg Address", "day": 19, "month": 11, "year": 1863, "hour": 2, "minute": 0, "meridian": 2 },
+    { "label": "Krakatoa's climactic eruption", "day": 27, "month": 8, "year": 1883, "hour": 10, "minute": 2, "meridian": 1 }
+  ]
+}

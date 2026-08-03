@@ -99,9 +99,9 @@ OBJECT_DICTIONARY: tuple[Entry, ...] = (
                 bits=(
                     Bit(1 << 0, "clearAllDisplays", "Clear All Displays", "oneshot"),
                     Bit(1 << 1, "updateAllDisplays", "Update All Displays", "oneshot"),
-                    Bit(1 << 2, "setAllDisplays", "Set All Displays (push OD dates to displays)", "oneshot"),
+                    Bit(1 << 2, "setAllDisplays", "Set All Displays", "oneshot"),
                     Bit(1 << 3, "updateDestinationDate", "Update Destination Date", "oneshot"),
-                    Bit(1 << 4, "updateRtc", "Update RTC (from present time)", "oneshot"),
+                    Bit(1 << 4, "updateRtc", "Update RTC", "oneshot"),
                     Bit(1 << 5, "saveDates", "Save Dates to SD Card", "oneshot"),
                 ),
             ),
@@ -112,9 +112,16 @@ OBJECT_DICTIONARY: tuple[Entry, ...] = (
         "settingParameters",
         "Settings",
         (
-            Field(1, "glitchPeriod", "Glitch Period", "u32", "rw", min=1, unit="ms"),
-            Field(2, "imuMotionThreshold", "IMU Any-Motion Threshold", "u8", "rw", min=1, max=255),
-            Field(3, "imuMotionDuration", "IMU Any-Motion Duration", "u8", "rw", min=0, max=3),
+            Field(1, "glitchPeriod", "Period", "u32", "rw", min=1, unit="ms"),
+            # Units per the BNO055 datasheet section 3.8.2.3: threshold is
+            # raw ACC_AM_THRES register counts (1 count = 3.91/7.81/15.6/31.3mg
+            # depending on the configured accelerometer G-range, which this
+            # firmware never explicitly sets - so "counts" rather than
+            # asserting a specific mg value). Duration is a count of
+            # consecutive slope samples that must exceed the threshold
+            # (N = AM_DUR + 1), not a time value.
+            Field(2, "imuMotionThreshold", "Motion Threshold", "u8", "rw", min=1, max=255, unit="counts"),
+            Field(3, "imuMotionDuration", "Motion Duration", "u8", "rw", min=0, max=3, unit="samples"),
             Field(
                 4,
                 "settingBits",
@@ -122,9 +129,9 @@ OBJECT_DICTIONARY: tuple[Entry, ...] = (
                 "u8",
                 "rw",
                 bits=(
-                    Bit(1 << 0, "glitchEnable", "Glitch Enable", "level"),
-                    Bit(1 << 1, "muteColonSound", "Mute Colon Tick Sound", "level"),
-                    Bit(1 << 2, "muteAll", "Mute All Sound", "level"),
+                    Bit(1 << 0, "glitchEnable", "Enable", "level"),
+                    Bit(1 << 1, "muteColonSound", "Mute Colon", "level"),
+                    Bit(1 << 2, "muteAll", "Mute All", "level"),
                     Bit(1 << 3, "applyImuSettings", "Apply IMU Settings", "oneshot"),
                     Bit(1 << 4, "applyGlitchSettings", "Apply Glitch Settings", "oneshot"),
                 ),
