@@ -357,12 +357,25 @@ function buildDateTimeCards() {
 }
 
 // Applies whatever is currently in the OD's destination/present/last-
-// departed records to all three physical displays. Must be two SEPARATE
-// writes in this order: the firmware checks UPDATE_ALL_DISPLAYS (bit1)
-// before SET_ALL_DISPLAYS (bit2) in code, regardless of bit-mask numeric
-// order, so combining them applies UPDATE_ALL_DISPLAYS to the stale
-// pre-sync data. Used for present time too (not just a UPDATE_RTC-only
-// apply) because the once-a-minute present-time refresh in
+// departed records to all three physical displays via two separate writes:
+// SET_ALL_DISPLAYS (bit2, copies the OD records into the firmware's working
+// config) then UPDATE_ALL_DISPLAYS (bit1, validates and redraws). Each is a
+// read-modify-write (read the current byte, OR in the bit, write it back) -
+// NOT a blind overwrite of the whole byte. The firmware's control loop only
+// runs every ~20ms, and a round trip to the board is often faster than
+// that, so the SET write frequently hasn't been processed yet by the time
+// the UPDATE write is sent (confirmed live: reading the byte back
+// immediately after the SET write showed it still pending about 40% of the
+// time in testing). A blind overwrite for the second write would silently
+// erase that still-pending SET bit before the firmware ever saw it -
+// which read back correctly from the OD (since the write itself always
+// succeeds) but never actually reached the display. Reading-before-writing
+// means the two bits just end up combined in that case, and the firmware
+// processes SET before UPDATE within the same control-loop iteration, so
+// either arrival order (same tick or different) ends up applying cleanly.
+//
+// Used for present time too (not just a UPDATE_RTC-only apply) because the
+// once-a-minute present-time refresh in
 // timeCircuit_control_updatePresentDateTime() only redraws the physical
 // display when the raw RTC minute value (0-59) differs from the last one
 // seen - if a synced time's minute happens to coincide with whatever was
@@ -372,8 +385,11 @@ function buildDateTimeCards() {
 // a valid date - if destination or last-departed is somehow invalid, this
 // silently no-ops.
 async function applyAllDisplaysFromOd() {
-  await apiWrite(0x2200, 0, 1 << 2); // SET_ALL_DISPLAYS
-  await apiWrite(0x2200, 0, 1 << 1); // UPDATE_ALL_DISPLAYS
+  const fc1 = await apiRead(0x2200, 0);
+  await apiWrite(0x2200, 0, fc1 | (1 << 2)); // SET_ALL_DISPLAYS
+
+  const fc2 = await apiRead(0x2200, 0);
+  await apiWrite(0x2200, 0, fc2 | (1 << 1)); // UPDATE_ALL_DISPLAYS
 }
 
 // ---------- Sync present time to real time ----------
