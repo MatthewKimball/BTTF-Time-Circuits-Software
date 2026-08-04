@@ -2,6 +2,33 @@ const API = "";
 
 let OD = null; // { entries: [...], stateNames: {...} }
 
+// Plain fetch() never times out - if the underlying connection goes dead
+// (e.g. an idle tunnel/proxy silently dropping it, which this dev setup is
+// commonly accessed through), the browser can hang on it indefinitely rather
+// than erroring, since it hasn't noticed the connection is gone yet. Without
+// this, an awaited fetch that hangs forever means whatever code was waiting
+// on it - a button's disabled state, a sync-in-progress flag - never reaches
+// its finally block either, so it stays stuck until the page is fully
+// reloaded (which throws away the dead connection and opens a new one).
+// Wrapping every fetch with a bounded timeout means a dead connection always
+// surfaces as a clear, recoverable error instead.
+const FETCH_TIMEOUT_MS = 8000;
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error(`request timed out after ${FETCH_TIMEOUT_MS / 1000}s (connection may be stale - try reloading the page)`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function log(msg, level = "info") {
   const el = document.getElementById("log");
   const time = new Date().toLocaleTimeString();
@@ -10,7 +37,7 @@ function log(msg, level = "info") {
 }
 
 async function apiRead(index, subindex) {
-  const res = await fetch(`${API}/api/read?index=${index}&subindex=${subindex}`, { cache: "no-store" });
+  const res = await fetchWithTimeout(`${API}/api/read?index=${index}&subindex=${subindex}`, { cache: "no-store" });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.detail || `read ${index.toString(16)}:${subindex} failed (${res.status})`);
@@ -20,7 +47,7 @@ async function apiRead(index, subindex) {
 }
 
 async function apiWrite(index, subindex, value) {
-  const res = await fetch(`${API}/api/write`, {
+  const res = await fetchWithTimeout(`${API}/api/write`, {
     method: "POST",
     cache: "no-store",
     headers: { "Content-Type": "application/json" },
@@ -60,7 +87,7 @@ async function refreshHealth() {
   const dot = document.getElementById("conn-dot");
   const text = document.getElementById("conn-text");
   try {
-    const res = await fetch(`${API}/api/health`, { cache: "no-store" });
+    const res = await fetchWithTimeout(`${API}/api/health`, { cache: "no-store" });
     const body = await res.json();
     if (body.connected) {
       dot.className = "dot ok";
@@ -78,7 +105,7 @@ async function refreshHealth() {
 document.getElementById("reconnect-btn").addEventListener("click", async () => {
   document.getElementById("conn-text").textContent = "reconnecting…";
   try {
-    await fetch(`${API}/api/reconnect`, { method: "POST" });
+    await fetchWithTimeout(`${API}/api/reconnect`, { method: "POST" });
   } catch (err) {
     log(`reconnect failed: ${err.message}`, "error");
   }
@@ -373,7 +400,7 @@ async function fetchTimeParts(tz) {
   // meaning the staleness was baked into the response itself, not caused by
   // this request being served from a browser/proxy cache. Left in anyway:
   // it's cheap, correct, and rules the caching class of bug out entirely.
-  const res = await fetch(`/api/realtime?tz=${encodeURIComponent(tz)}&_=${Date.now()}`, { cache: "no-store" });
+  const res = await fetchWithTimeout(`/api/realtime?tz=${encodeURIComponent(tz)}&_=${Date.now()}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`realtime lookup failed (${res.status})`);
   const body = await res.json();
   const m = body.iso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
@@ -653,7 +680,7 @@ document.getElementById("movie-dates-btn").addEventListener("click", async () =>
   statusEl.textContent = "Fetching movie-accurate dates…";
 
   try {
-    const res = await fetch("/api/movie-dates", { cache: "no-store" });
+    const res = await fetchWithTimeout("/api/movie-dates", { cache: "no-store" });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.detail || `fetch failed (${res.status})`);
@@ -693,7 +720,7 @@ document.getElementById("randomiser-btn").addEventListener("click", async () => 
   statusEl.textContent = "Picking a moment in history…";
 
   try {
-    const res = await fetch("/api/historical-dates", { cache: "no-store" });
+    const res = await fetchWithTimeout("/api/historical-dates", { cache: "no-store" });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.detail || `fetch failed (${res.status})`);
@@ -754,7 +781,7 @@ async function init() {
   await refreshHealth();
   setInterval(refreshHealth, 5000);
 
-  const res = await fetch(`${API}/api/od`, { cache: "no-store" });
+  const res = await fetchWithTimeout(`${API}/api/od`, { cache: "no-store" });
   OD = await res.json();
 
   buildDateTimeCards();

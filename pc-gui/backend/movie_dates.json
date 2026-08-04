@@ -2,13 +2,15 @@
   "_comment": "Movie-accurate default date/times. Edit freely - the web GUI reads this file fresh on every request, no restart needed. Fields: day, month, year, hour (1-12), minute, meridian (1=AM, 2=PM). These match the firmware's compiled-in gDefaultDestinationTime/gDefaultPresentTime/gDefaultLastDepartedTime arrays in App/Time_Circuits/timecircuit_control.c.",
 
   "destinationTime": {
-    "day": 27, "month": 10, "year": 1985, "hour": 11, "minute": 0, "meridian": 1
+    "_comment": "Nov 12, 1955, 6:00 AM - Doc and Marty travel to 1955 to recover the sports almanac from Biff.",
+    "day": 12, "month": 11, "year": 1955, "hour": 6, "minute": 0, "meridian": 1
   },
   "presentTime": {
-    "day": 21, "month": 10, "year": 2015, "hour": 4, "minute": 29, "meridian": 2
+    "_comment": "Oct 26, 1985, 1:35 AM - Doc and Marty travel from alternate 1985.",
+    "day": 26, "month": 10, "year": 1985, "hour": 1, "minute": 35, "meridian": 1
   },
   "lastDepartedTime": {
-    "_comment": "Nov 12, 1955, 10:04 PM - the exact moment lightning strikes the clock tower",
-    "day": 12, "month": 11, "year": 1955, "hour": 10, "minute": 4, "meridian": 2
+    "_comment": "Oct 21, 2015, 7:28 PM - Doc and Marty travel from Oct 21, 2015 to alternate 1985.",
+    "day": 21, "month": 10, "year": 2015, "hour": 7, "minute": 28, "meridian": 2
   }
 }
