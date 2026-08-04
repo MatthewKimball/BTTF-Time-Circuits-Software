@@ -12,6 +12,7 @@
 #include "bno055.h"
 #include "stm32f4xx_hal.h"
 #include "gpio.h"
+#include "i2c.h"
 #include "cmsis_os.h"
 #include <stdbool.h>
 #include <stdint.h>
@@ -48,6 +49,39 @@ static volatile bool sImuIntPending = false;
 static osMutexId_t sImuI2cMutexHandle = NULL;
 static const osMutexAttr_t sImuI2cMutexAttr = { .name = "ImuI2cMutex" };
 
+// Consecutive I2C failures while trying to clear the BNO055's interrupt
+// latch, before falling back to a full bus recovery.
+#define IMU_I2C_FAIL_RECOVERY_THRESHOLD 3
+static uint32_t sImuI2cFailCount = 0;
+
+// Clears the BNO055 interrupt latch. Must be called with sImuI2cMutexHandle
+// already held. I2C1 is the IMU's own dedicated bus (unlike the displays or
+// RTC, nothing else shares it), but it has no bus-recovery mechanism of its
+// own - if a transaction ever gets cut short mid-byte by electrical noise
+// (plausible right around a physical tap, exactly when this bus is in
+// active use), the slave can be left holding SDA low. Every future clear
+// attempt then silently times out via HAL_TIMEOUT, whose return code
+// neither this nor the underlying driver used to check, so the interrupt
+// stayed latched forever with no way back except a power cycle - looking
+// exactly like the IMU "going to sleep" for a different reason than the
+// lost-edge case described above. Past IMU_I2C_FAIL_RECOVERY_THRESHOLD
+// consecutive failures, run the same manual-clock recovery sequence already
+// used for the RTC's I2C2 bus (see I2C1_BusRecovery()), then retry once.
+static void imu_clearInterruptLatch(void)
+{
+    if (bno055_set_intr_rst(ENABLED) == BNO055_SUCCESS)
+    {
+        sImuI2cFailCount = 0;
+        return;
+    }
+
+    if (++sImuI2cFailCount >= IMU_I2C_FAIL_RECOVERY_THRESHOLD)
+    {
+        I2C1_BusRecovery();
+        sImuI2cFailCount = 0;
+        bno055_set_intr_rst(ENABLED); // best-effort retry right after recovery
+    }
+}
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
@@ -94,7 +128,7 @@ void imu_bno055_service(void)
 
         if (osMutexAcquire(sImuI2cMutexHandle, 50) == osOK)
         {
-            bno055_set_intr_rst(ENABLED);
+            imu_clearInterruptLatch();
             osMutexRelease(sImuI2cMutexHandle);
         }
         else
@@ -114,7 +148,7 @@ void imu_bno055_service(void)
             lastWatchdogClearTick = now;
             if (osMutexAcquire(sImuI2cMutexHandle, 50) == osOK)
             {
-                bno055_set_intr_rst(ENABLED);
+                imu_clearInterruptLatch();
                 osMutexRelease(sImuI2cMutexHandle);
             }
         }

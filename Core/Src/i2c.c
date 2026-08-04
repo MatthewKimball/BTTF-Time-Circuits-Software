@@ -269,6 +269,57 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef* i2cHandle)
 
 /* USER CODE BEGIN 1 */
 
+// Same bus-recovery procedure as I2C2_BusRecovery() below, for the IMU's
+// dedicated I2C1 bus. Unlike the RTC, the BNO055 isn't battery-backed, but
+// the same wedge can still happen from a transaction getting cut short
+// mid-byte by electrical noise - plausible right around a tap/motion event,
+// which is exactly when this bus is being actively used. Before this
+// existed, a wedge here was unrecoverable except by a full power cycle:
+// every future attempt to clear the BNO055's interrupt latch (both the
+// direct clear and the watchdog in imu_bno055_service()) would keep
+// silently failing forever against a bus nothing was clocking free.
+void I2C1_BusRecovery(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  HAL_I2C_DeInit(&hi2c1);
+
+  GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_OD;
+  GPIO_InitStruct.Pull  = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+
+  GPIO_InitStruct.Pin = IMU_SCL_Pin;
+  HAL_GPIO_Init(IMU_SCL_GPIO_Port, &GPIO_InitStruct);
+  GPIO_InitStruct.Pin = IMU_SDA_Pin;
+  HAL_GPIO_Init(IMU_SDA_GPIO_Port, &GPIO_InitStruct);
+
+  HAL_GPIO_WritePin(IMU_SDA_GPIO_Port, IMU_SDA_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(IMU_SCL_GPIO_Port, IMU_SCL_Pin, GPIO_PIN_SET);
+
+  for (int i = 0; i < 9; i++)
+  {
+    if (HAL_GPIO_ReadPin(IMU_SDA_GPIO_Port, IMU_SDA_Pin) == GPIO_PIN_SET)
+    {
+      break; // slave already released the bus
+    }
+    HAL_GPIO_WritePin(IMU_SCL_GPIO_Port, IMU_SCL_Pin, GPIO_PIN_RESET);
+    HAL_Delay(1);
+    HAL_GPIO_WritePin(IMU_SCL_GPIO_Port, IMU_SCL_Pin, GPIO_PIN_SET);
+    HAL_Delay(1);
+  }
+
+  // STOP condition: SDA low-to-high while SCL is high
+  HAL_GPIO_WritePin(IMU_SDA_GPIO_Port, IMU_SDA_Pin, GPIO_PIN_RESET);
+  HAL_Delay(1);
+  HAL_GPIO_WritePin(IMU_SCL_GPIO_Port, IMU_SCL_Pin, GPIO_PIN_SET);
+  HAL_Delay(1);
+  HAL_GPIO_WritePin(IMU_SDA_GPIO_Port, IMU_SDA_Pin, GPIO_PIN_SET);
+  HAL_Delay(1);
+
+  // Restores AF mode on both pins and re-enables the peripheral clock.
+  MX_I2C1_Init();
+}
+
 // Standard I2C bus-recovery procedure. A slave that's battery-backed (like
 // the external RTC) can outlive the master's power cycle: if a transaction
 // was in progress when the STM32 lost power, the slave can be left holding
