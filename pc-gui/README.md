@@ -59,22 +59,40 @@ Example: `TC_CAN_PORT=/dev/ttyACM1 .venv/bin/uvicorn app:app --port 8420`
 
 ## What the panel controls
 
-- **Date/Time** (0x2000/0x2001/0x2002): destination, present, and last-
-  departed time records. "Write to device" pushes the edited fields into the
-  board's OD; "Update Destination Display" additionally triggers the
-  firmware to actually redraw the destination display and validate the
-  date.
+- **Live Status**: the current time circuits state and the four physical
+  switches, updated in real time over a WebSocket.
 - **Time Circuits State** (0x2102): request Idle/Armed/Travel/Complete. The
   firmware validates the transition (e.g. Armed requires a valid destination
   date) and silently ignores an invalid request rather than erroring.
+- **Movie-Accurate Defaults**: resets destination, present, and last-
+  departed time to movie-accurate dates and applies them to the displays
+  and RTC in one click. Backed by `backend/movie_dates.json`, which is
+  read fresh on every request - edit it to change the dates, no restart
+  needed.
+- **Randomiser**: sets just the destination time to a random historically
+  significant moment, backed by `backend/historical_dates.json` (same
+  "edit freely, no restart needed" behavior).
+- **Date/Time** (0x2000/0x2001/0x2002): destination, present, and last-
+  departed time records, each with **Read** / **Write** / **Update**
+  buttons - Read pulls the current values from the board, Write pushes the
+  edited fields into the OD, and Update does a Write followed by the
+  matching firmware trigger (redraw + validate + save to SD). The present
+  time card also has **Sync to Timezone** (pick any zone and sync to it)
+  and **Sync to My Timezone** (uses the browser's detected zone) - both
+  fetch the current time from the server's own OS clock (not the browser's)
+  and apply it right as the clock's seconds roll over to `:00`.
 - **Function Control** (0x2200): one-shot actions - clear/update/set
-  displays, update RTC from the present-time record, save dates to the SD
-  card. Each button just sets a bit; the firmware acts on it and clears it
-  automatically within one control loop iteration.
-- **Settings** (0x2300): glitch enable / mute colon tick / mute all are
-  live switches. Glitch period and IMU any-motion threshold/duration are
+  displays, update destination date, update RTC from the present-time
+  record, save dates to the SD card. Each button just sets a bit; the
+  firmware acts on it and clears it automatically within one control loop
+  iteration.
+- **Settings** (0x2300), grouped into Glitch / Sound Effects / IMU:
+  glitch enable, mute colon tick, and mute all are live switches (applied
+  immediately). Glitch period and IMU any-motion threshold/duration are
   edited then applied via their own one-shot "Apply" bit, matching how the
-  firmware only re-reads those values when told to.
+  firmware only re-reads those values when told to. Note the physical Mute
+  switch only silences the colon tick - "Mute All" here is the only way to
+  mute everything.
 - **Advanced: Raw OD Access**: generic index:subindex SDO read/write, for
   anything not covered by the named panels above.
 
@@ -82,7 +100,10 @@ Example: `TC_CAN_PORT=/dev/ttyACM1 .venv/bin/uvicorn app:app --port 8420`
 
 - SDO requests time out after 1s if the board doesn't respond (wrong node
   ID, bus not connected, board unpowered, etc.) - shown as an error in the
-  panel's log rather than hanging.
+  panel's log rather than hanging. Separately, every browser-side `fetch()`
+  has its own 8s timeout, so a stale/dead connection between the browser
+  and this backend (e.g. over a tunneled dev setup) surfaces as a clear
+  error instead of hanging a button forever.
 - Only expedited SDO transfers (<=4 bytes) are implemented, since every
   object in this OD fits that. If a future OD entry needs more than 4 bytes,
   `backend/canopen_sdo.py` will need segmented transfer support added.
