@@ -116,6 +116,7 @@ char lockedSound_filename[]  = "locked.wav";
 char colonSound_filename[]  = "beep6.wav";
 char gitchSound_filename[]  = "glitch2.wav";
 char enterSound_filename[]  = "enter2.wav";
+char startupSound_filename[]  = "enter_v1.wav";
 
 
 //Switches
@@ -217,10 +218,28 @@ TimeCircuit_Control_Config_t* timeCircuit_control_init(I2C_HandleTypeDef* const 
   // no way to recover - keeping it out entirely means the RTC can fail in
   // any way whatsoever without affecting displays, keypad, sound, or CAN.
 
-  //Update display with retrieved date times
-  timeCircuit_control_updateDisplays(pConfig);
+  // Deliberately NOT drawing the retrieved date/times to the displays here -
+  // each dateTime_display_init() call above already left its display blank,
+  // and pConfig now holds the correct startup values ready to draw. Actually
+  // drawing them is left to timeCircuit_control_playStartupSequence(), which
+  // runs after the scheduler starts so the displays visibly light up just
+  // after the startup sound begins, not before it while the board is still
+  // silently initializing.
 
   return pConfig;
+}
+
+// Queues the startup sound and draws the displays (already holding their
+// startup values from timeCircuit_control_init()) together - queuing is
+// non-blocking (SoundTask picks it up on its own schedule) so the draw call
+// right after starts essentially the same moment. A 500ms gap here used to
+// separate the two, but the startup sound is shorter than that, so it had
+// already finished playing by the time the displays lit up.
+TimeCircuit_Control_Status_t timeCircuit_control_playStartupSequence(TimeCircuit_Control_Config_t* const pConfig)
+{
+  osMessageQueuePut(soundQueueHandle, &startupSound_filename, 0, 0);
+
+  return timeCircuit_control_updateDisplays(pConfig);
 }
 
 TimeCircuit_Control_Status_t timeCircuit_control_initRTC(TimeCircuit_Control_Config_t * const pConfig)
@@ -244,8 +263,15 @@ TimeCircuit_Control_Status_t timeCircuit_control_initRTC(TimeCircuit_Control_Con
     //Set present date time to RTC date time
     dateTime_setRtcDateTimeData(pConfig->pPresentTime, &pConfig->hRtcDate, &pConfig->hRtcTime);
 
-    //Refresh just the present-time display now that real RTC data is available
-    dateTime_updateDisplay(pConfig->pPresentTime);
+    // Deliberately NOT drawing to the display here - this task runs
+    // concurrently with StartMainTask's timeCircuit_control_playStartupSequence(),
+    // which draws all three displays together shortly after the startup
+    // sound begins. Drawing here too raced against that: whichever task
+    // reached the I2C bus first, the present display would visibly light up
+    // on its own before (or after) the other two instead of all three
+    // together. pConfig->pPresentTime is still updated above, so whichever
+    // draw happens second (usually playStartupSequence()'s, since this task
+    // only needs a quick I2C init+read) just paints the same correct value.
 
     isSuccess = true;
   }
@@ -306,13 +332,20 @@ static void timeCircuit_syncOdDateTimes(TimeCircuit_Control_Config_t* const pCon
   dateTime_getRemoteDateTime((OD_DateTimeRec_t*)&OD_RAM.x2002_lastDepartedTime, pConfig->pLastDepartedTime);
 }
 
+// Every caller of this redraws all three displays wholesale (startup, a
+// time travel event, "set to defaults", the CAN-triggered all-displays
+// update) - many/all characters can change at once, so each display uses
+// the atomic (blank-then-reveal) draw here to avoid a visible ripple. The
+// routine once-a-minute present-time tick deliberately bypasses this
+// function and calls dateTime_updateDisplay() directly instead - see
+// timeCircuit_control_updatePresentDateTime().
 TimeCircuit_Control_Status_t timeCircuit_control_updateDisplays(TimeCircuit_Control_Config_t* const pConfig)
 {
   TimeCircuit_Control_Status_t isSuccess = false;
 
-  isSuccess = dateTime_updateDisplay(pConfig->pDestinationTime);
-  isSuccess &= dateTime_updateDisplay(pConfig->pPresentTime);
-  isSuccess &= dateTime_updateDisplay(pConfig->pLastDepartedTime);
+  isSuccess = dateTime_updateDisplayAtomic(pConfig->pDestinationTime);
+  isSuccess &= dateTime_updateDisplayAtomic(pConfig->pPresentTime);
+  isSuccess &= dateTime_updateDisplayAtomic(pConfig->pLastDepartedTime);
 
   return isSuccess;
 }
@@ -701,7 +734,7 @@ TimeCircuit_Control_Status_t timeCircuit_control_updateDestinationDateTime(TimeC
 
         //Delay Display Update
         osDelay(DISPLAY_DELAY_MS);
-        dateTime_updateDisplay(pConfig->pDestinationTime);
+        dateTime_updateDisplayAtomic(pConfig->pDestinationTime);
 
         //Save new date times
         timeCircuit_control_saveDateTimes(pConfig);
@@ -920,6 +953,21 @@ static void timeCircuit_processFunctionControl(TimeCircuit_Control_Config_t* con
         OD_RAM.x2200_functionControl &= ~FUNC_CTRL_CLEAR_ALL_DISPLAYS; // clear bit after action
     }
 
+    // Must run before FUNC_CTRL_UPDATE_ALL_DISPLAYS below, not after: the GUI
+    // sends these as two separate SDO writes (SET, then UPDATE), relying on
+    // each one landing in its own iteration of this ~20ms task loop. Over a
+    // fast local CAN adapter, both writes routinely complete faster than
+    // that, landing in the SAME `fc` snapshot read at the top of this
+    // function. With SET processed after UPDATE (the previous order), that
+    // case redrew the displays using the OLD OD_RAM.x2000/1/2 values just
+    // dropped from the config (see `timeCircuit_setRemoteDisplayDates()`
+    // below) - copy in the new dates first, then validate/draw the same
+    // iteration.
+    if (fc & FUNC_CTRL_SET_ALL_DISPLAYS) {
+      timeCircuit_setRemoteDisplayDates(pConfig);
+        OD_RAM.x2200_functionControl &= ~FUNC_CTRL_SET_ALL_DISPLAYS;
+    }
+
     if (fc & FUNC_CTRL_UPDATE_ALL_DISPLAYS) {
       timeCircuit_control_clearDisplays(pConfig);
 
@@ -949,7 +997,8 @@ static void timeCircuit_processFunctionControl(TimeCircuit_Control_Config_t* con
       if (timeCircuit_control_isRemoteDateValid(pConfig->pDestinationTime) == TIMECIRCUIT_CONTROL_OK)
       {
         osDelay(DISPLAY_DELAY_MS);
-        dateTime_updateDisplay(pConfig->pDestinationTime);
+        dateTime_updateDisplayAtomic(pConfig->pDestinationTime);
+        timeCircuit_control_saveDateTimes(pConfig);
         osMessageQueuePut(soundQueueHandle, &lockedSound_filename, 0, 0);
         timeCircuit_syncKeypadBufferFromDestination(pConfig);
         ctx->inputDateValid = true;
@@ -970,11 +1019,6 @@ static void timeCircuit_processFunctionControl(TimeCircuit_Control_Config_t* con
     if (fc & FUNC_CTRL_SAVE_DATES) {
       timeCircuit_control_saveDateTimes(pConfig);
         OD_RAM.x2200_functionControl &= ~FUNC_CTRL_SAVE_DATES;
-    }
-
-    if (fc & FUNC_CTRL_SET_ALL_DISPLAYS) {
-      timeCircuit_setRemoteDisplayDates(pConfig);
-        OD_RAM.x2200_functionControl &= ~FUNC_CTRL_SET_ALL_DISPLAYS;
     }
 
 }

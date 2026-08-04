@@ -48,6 +48,7 @@ TimeCircuit_Control_Status_t  timeCircuit_control_update(TimeCircuit_Control_Con
 TimeCircuit_Control_Status_t  timeCircuit_control_setDefaultDisplays(TimeCircuit_Control_Config_t * const pConfig);
 TimeCircuit_Control_Status_t  timeCircuit_control_updateStartUpDateTimes(TimeCircuit_Control_Config_t * const pConfig);
 TimeCircuit_Control_Status_t  timeCircuit_control_updateDisplays(TimeCircuit_Control_Config_t * const pConfig);
+TimeCircuit_Control_Status_t  timeCircuit_control_playStartupSequence(TimeCircuit_Control_Config_t * const pConfig);
 TimeCircuit_Control_Status_t  timeCircuit_control_setRtcDateTime(TimeCircuit_Control_Config_t * const pConfig);
 TimeCircuit_Control_Status_t timeCircuit_control_deInit(TimeCircuit_Control_Config_t* const pConfig);
 

@@ -191,11 +191,19 @@ void MX_FREERTOS_Init(void) {
 void StartMainTask(void *argument)
 {
   /* USER CODE BEGIN StartMainTask */
-  imu_bno055_init();
+  // Plays the startup sound and draws the displays (already left blank by
+  // timeCircuit_control_init()) together - see
+  // timeCircuit_control_playStartupSequence(). Deliberately runs before
+  // imu_bno055_init() below: that call blocks for ~2.1s total (a mandatory
+  // 1500ms power-on settle delay plus BNO055 mode-switch delays), which
+  // used to sit in front of the startup sequence and made the displays
+  // stay dark for that whole time on every boot. Nothing at boot depends
+  // on the IMU being ready immediately, so it's fine for its init to
+  // finish a couple seconds into the sound/display sequence instead - the
+  // main loop below still only starts once it's done either way.
+  timeCircuit_control_playStartupSequence(gTimeCircuitConfig);
 
-  //Play TC Start Up Sound
-  char filename[] = "enter_v1.wav";
-  osMessageQueuePut(soundQueueHandle, &filename, 0, 0);
+  imu_bno055_init();
 
   /* Infinite loop */
   for(;;)

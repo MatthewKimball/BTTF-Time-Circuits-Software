@@ -571,6 +571,26 @@ DateTime_Display_Status_t dateTime_updateDisplay(DateTime_Display_Config_t* cons
   return isSuccess;
 }
 
+// Same as dateTime_updateDisplay(), but hides the write behind a brief
+// display-off/on toggle so a full redraw (every character potentially
+// changing at once - startup, a new destination date, etc.) appears
+// atomically instead of rippling across the display as each of its ~15
+// individual I2C writes lands. Deliberately NOT used for routine updates
+// like the once-a-minute present-time tick, where usually only one digit
+// actually changes - wrapping those too would blank and relight the whole
+// display every single minute, which is a more noticeable flicker than the
+// tiny ripple it would be "fixing".
+DateTime_Display_Status_t dateTime_updateDisplayAtomic(DateTime_Display_Config_t* const pConfig)
+{
+  DateTime_Display_Status_t isSuccess;
+
+  ht16k33_setDisplaySetup(pConfig->hDisplayDriver, Ht16k33_DisplayStatus_Off, Ht16k33_BlinkingFrequency_Off);
+  isSuccess = dateTime_updateDisplay(pConfig);
+  ht16k33_setDisplaySetup(pConfig->hDisplayDriver, Ht16k33_DisplayStatus_On, Ht16k33_BlinkingFrequency_Off);
+
+  return isSuccess;
+}
+
 DateTime_Display_Status_t dateTime_setRemoteDateTime (const OD_DateTimeRec_t *src, DateTime_Display_Config_t* const dst)
 {
   dst->dateTimeData.Day    = src->day;

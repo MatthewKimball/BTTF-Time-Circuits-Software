@@ -52,6 +52,7 @@ typedef bool DateTime_Display_Status_t;
 DateTime_Display_Config_t*  dateTime_display_init(I2C_HandleTypeDef* const hi2c, const uint8_t addrs);
 DateTime_Display_Status_t   dateTime_clearDisplay(DateTime_Display_Config_t* const pConfig);
 DateTime_Display_Status_t   dateTime_updateDisplay(DateTime_Display_Config_t* const pConfig);
+DateTime_Display_Status_t   dateTime_updateDisplayAtomic(DateTime_Display_Config_t* const pConfig);
 DateTime_Display_Status_t   dateTime_setDisplayData(DateTime_Display_Config_t* const pConfig,
     const uint8_t* const inputDateTime);
 DateTime_Display_Status_t   dateTime_toggleTimeColon(DateTime_Display_Config_t* const pConfig,
