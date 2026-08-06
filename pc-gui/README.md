@@ -1,7 +1,9 @@
 # Time Circuits Control Panel
 
-A local web GUI for controlling the Time Circuits board over CAN, via a
-USBtin (or any slcan-compatible) CAN-USB adapter.
+A local web GUI for controlling the Time Circuits board over CAN - either
+via a USBtin (or any slcan-compatible) CAN-USB adapter from a dev machine,
+or via SocketCAN (e.g. a PiCAN2 HAT) for a permanent Raspberry Pi
+deployment (see [Raspberry Pi deployment](#raspberry-pi-deployment) below).
 
 It talks to the board as a CANopen SDO client - it can read and write any
 object in the OD (`CANopen/OD.h` / `OD.c` in the firmware repo), not just a
@@ -10,12 +12,17 @@ fixed set of hardcoded commands.
 ## Architecture
 
 - `backend/` - a small Python (FastAPI) service that opens the CAN adapter
-  with [python-can](https://python-can.readthedocs.io/)'s `slcan` interface
-  and speaks CANopen SDO (expedited transfers) to the board. Serves a JSON/
-  WebSocket API on `localhost`, and also serves the frontend.
+  with [python-can](https://python-can.readthedocs.io/) (`slcan` or
+  `socketcan`, see `TC_CAN_INTERFACE` below) and speaks CANopen SDO
+  (expedited transfers) to the board. Serves a JSON/WebSocket API on
+  `localhost`, and also serves the frontend. `gpio_devices.py` additionally
+  drives an optional relay + status LEDs on a Pi deployment, degrading to
+  a no-op stand-in when there's no GPIO hardware (e.g. a dev machine).
 - `frontend/` - a plain HTML/CSS/JS page (no build step) that talks to the
   backend and renders the controls. Open it via the backend's URL, not as a
   `file://` page (it needs the API).
+- `deploy/` - systemd units and an install script for the Raspberry Pi
+  deployment.
 
 ## One-time setup
 
@@ -49,18 +56,82 @@ Then open http://127.0.0.1:8420 in a browser.
 
 Config via environment variables (defaults match the firmware):
 
-| Variable         | Default        | Meaning                                  |
-|------------------|----------------|-------------------------------------------|
-| `TC_CAN_PORT`    | `/dev/ttyACM0` | Serial device for the USBtin              |
-| `TC_CAN_BITRATE` | `1000000`      | CAN bus bitrate (bps)                     |
-| `TC_CAN_NODE_ID` | `21`           | CANopen node ID of the Time Circuits board |
+| Variable          | Default        | Meaning                                  |
+|-------------------|----------------|-------------------------------------------|
+| `TC_CAN_INTERFACE`| `slcan`        | `slcan` (USBtin) or `socketcan` (PiCAN2)  |
+| `TC_CAN_PORT`     | `/dev/ttyACM0` | `slcan` only: serial device for the USBtin |
+| `TC_CAN_CHANNEL`  | `can0`         | `socketcan` only: interface name          |
+| `TC_CAN_BITRATE`  | `1000000`      | CAN bus bitrate (bps) - for `socketcan` this is informational only, the OS-level bitrate is set by `can0-up.service` |
+| `TC_CAN_NODE_ID`  | `21`           | CANopen node ID of the Time Circuits board |
 
 Example: `TC_CAN_PORT=/dev/ttyACM1 .venv/bin/uvicorn app:app --port 8420`
+
+## Raspberry Pi deployment
+
+For running this permanently (as a systemd service, starting on boot) on a
+Raspberry Pi with a [PiCAN2](https://copperhilltech.com/pican-2-can-bus-board-for-raspberry-pi/)
+HAT instead of a USBtin, plus an optional 2-channel relay for switching
+power to the Time Circuits hardware (and a second device) and two status
+LEDs.
+
+**Hardware:**
+
+| Signal | BCM GPIO | Physical pin | Notes |
+|---|---|---|---|
+| PiCAN2 SPI0 + INT | GPIO 8/9/10/11, 25 | - | Used by the HAT itself, not user-wired |
+| Relay channel 1 (Time Circuits power) | GPIO5 | 29 | Active-high trigger by default (`TC_RELAY_ACTIVE_HIGH`) |
+| Relay channel 2 (device 2 power) | GPIO6 | 31 | Same |
+| LED: system alive (heartbeat) | GPIO13 | 33 | 1s on/1s off once the service is up |
+| LED: CAN link | GPIO19 | 35 | On when the Time Circuits board is responding on CAN |
+
+GPIO5/6/13/19 are adjacent on the header with ground pins nearby, chosen
+to avoid everything the PiCAN2 uses. Verify the relay module's trigger
+input is rated for 3.3V logic before wiring it directly to a Pi GPIO -
+some relay boards expect 5V (Arduino-style) triggering and need a
+buffer/level-shifter instead.
+
+**Software**, run on the Pi itself:
+
+```
+git clone <this repo> ~/BTTF-Time-Circuits-Software
+cd ~/BTTF-Time-Circuits-Software
+sudo pc-gui/deploy/install.sh
+sudo reboot   # only needed the first time, to activate the PiCAN2 overlay
+```
+
+`install.sh` installs everything via `apt` (no venv - avoids Debian's
+PEP 668 externally-managed-environment restriction and keeps the systemd
+unit simple), enables SPI, adds the `dtoverlay=mcp2515-can0,...` line to
+`/boot/firmware/config.txt` if it isn't already there, and installs +
+enables two systemd units:
+
+- `can0-up.service` - brings `can0` up at 1 Mbit/s as soon as the PiCAN2's
+  network device appears (`sys-subsystem-net-devices-can0.device`), with
+  automatic bus-off recovery.
+- `timecircuits-gui.service` - runs the backend with `TC_CAN_INTERFACE=socketcan`.
+  Not gated on `can0-up.service` actually succeeding - the backend's own
+  background health monitor retries the CAN connection on its own, so the
+  web UI (and relay control) comes up regardless.
+
+Re-running `install.sh` is safe (idempotent) if you change the deploy
+files. After editing a `.service`/`.service.in` file, re-run it and then
+`sudo systemctl restart timecircuits-gui.service` (or `can0-up.service`).
+
+Oscillator frequency in the overlay (`oscillator=16000000`) matches a
+16MHz PiCAN2 - if CAN never comes up and everything else checks out
+(`ip link show can0` shows `UP`, `dmesg | grep mcp251x` shows no errors),
+this is the first thing to check against your board's actual crystal.
 
 ## What the panel controls
 
 - **Live Status**: the current time circuits state and the four physical
   switches, updated in real time over a WebSocket.
+- **Power**: toggles the relay board's two power outlets (see
+  [Raspberry Pi deployment](#raspberry-pi-deployment) above). Talks
+  straight to `/api/relay`, not the CANopen OD - this is Pi-local
+  infrastructure, unrelated to the STM32's object dictionary. Works the
+  same with no relay wired up (a dev machine, or before the Pi's GPIO is
+  connected) - the toggles just have no physical effect.
 - **Time Circuits State** (0x2102): request Idle/Armed/Travel/Complete. The
   firmware validates the transition (e.g. Armed requires a valid destination
   date) and silently ignores an invalid request rather than erroring.
