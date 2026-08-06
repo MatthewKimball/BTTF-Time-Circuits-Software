@@ -53,32 +53,48 @@ class CanopenSdoClient:
     def _transact(self, request: bytes) -> bytes:
         """Send one SDO request frame and wait for the matching response."""
         with self._lock:
-            # Drain any stale frames sitting in the receive buffer first.
-            while self.bus.recv(timeout=0) is not None:
-                pass
+            try:
+                # Drain any stale frames sitting in the receive buffer first.
+                while self.bus.recv(timeout=0) is not None:
+                    pass
 
-            msg = can.Message(
-                arbitration_id=self.tx_id,
-                data=request,
-                is_extended_id=False,
-            )
-            self.bus.send(msg)
+                msg = can.Message(
+                    arbitration_id=self.tx_id,
+                    data=request,
+                    is_extended_id=False,
+                )
+                self.bus.send(msg)
 
-            deadline = time.monotonic() + self.timeout
-            while True:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise SdoTimeout(
-                        f"No SDO response from node {self.node_id} within {self.timeout}s"
-                    )
-                reply = self.bus.recv(timeout=remaining)
-                if reply is None:
-                    raise SdoTimeout(
-                        f"No SDO response from node {self.node_id} within {self.timeout}s"
-                    )
-                if reply.arbitration_id == self.rx_id:
-                    return bytes(reply.data)
-                # Not our SDO response (other bus traffic) - keep waiting.
+                deadline = time.monotonic() + self.timeout
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise SdoTimeout(
+                            f"No SDO response from node {self.node_id} within {self.timeout}s"
+                        )
+                    reply = self.bus.recv(timeout=remaining)
+                    if reply is None:
+                        raise SdoTimeout(
+                            f"No SDO response from node {self.node_id} within {self.timeout}s"
+                        )
+                    if reply.arbitration_id == self.rx_id:
+                        return bytes(reply.data)
+                    # Not our SDO response (other bus traffic) - keep waiting.
+            except can.CanError as exc:
+                # Raised by python-can's socketcan backend (not slcan) when
+                # the interface is bus-off - which happens routinely on a
+                # freshly-wired SocketCAN bus with no other node on it yet
+                # (e.g. the Pi before the Time Circuits board is connected):
+                # every transmitted frame goes unacknowledged, so the
+                # controller's transmit error counter trips into bus-off
+                # and further sends fail with "No buffer space available"
+                # rather than just timing out. Treated the same as a
+                # timeout - both mean the transaction didn't complete - so
+                # every existing caller (HTTP handlers, the /ws/live poll
+                # loop) already handles it correctly without change. The
+                # interface itself self-recovers (see can0-up.service's
+                # `restart-ms`), so the next attempt can succeed again.
+                raise SdoTimeout(f"CAN error talking to node {self.node_id}: {exc}") from exc
 
     def read(self, index: int, subindex: int, size_hint: int | None = None) -> int:
         """Expedited SDO upload. Returns the value as an unsigned int."""

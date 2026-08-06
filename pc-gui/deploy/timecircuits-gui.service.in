@@ -1,0 +1,23 @@
+[Unit]
+Description=Time Circuits Control Panel
+After=network-online.target can0-up.service
+Wants=network-online.target
+# Not a hard dependency on can0-up.service - app.py's own background
+# health monitor (_health_monitor_loop) retries the CAN connection on its
+# own, so the web UI (and relay control) should still come up even if
+# CAN/the PiCAN2 board isn't ready yet.
+
+[Service]
+Type=simple
+User=__RUN_USER__
+WorkingDirectory=__REPO_DIR__/pc-gui/backend
+Environment=TC_CAN_INTERFACE=socketcan
+Environment=TC_CAN_CHANNEL=can0
+Environment=TC_CAN_BITRATE=1000000
+Environment=TC_CAN_NODE_ID=21
+ExecStart=/usr/bin/python3 -m uvicorn app:app --host 0.0.0.0 --port 8420
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

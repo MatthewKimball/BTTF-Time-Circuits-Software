@@ -1,0 +1,16 @@
+[Unit]
+Description=Bring up can0 (PiCAN2) at 1 Mbit/s
+BindsTo=sys-subsystem-net-devices-can0.device
+After=sys-subsystem-net-devices-can0.device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# restart-ms 100: auto-recover from a bus-off condition instead of needing
+# a manual `ip link` cycle - matches the bitrate configured in
+# Core/Src/can.c on the firmware side (see TC_CAN_BITRATE in app.py).
+ExecStart=/sbin/ip link set can0 up type can bitrate 1000000 restart-ms 100
+ExecStop=/sbin/ip link set can0 down
+
+[Install]
+WantedBy=multi-user.target
