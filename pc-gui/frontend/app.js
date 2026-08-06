@@ -581,6 +581,178 @@ function buildFunctionControlButtons() {
   }
 }
 
+// ---------- Power relay + scheduler ----------
+
+// Talks straight to /api/relay and /api/schedule rather than the OD - this
+// is Pi-local infrastructure (mains power to the Time Circuits hardware),
+// nothing to do with the STM32's CANopen object dictionary. Works
+// identically whether or not real GPIO hardware is present: the backend's
+// gpio_devices.py degrades to a no-op stand-in on a dev machine. Relay
+// channel 2 exists in the backend as a spare but is deliberately not
+// exposed here.
+const POWER_RELAY_CHANNEL = 1;
+
+async function refreshPowerStatus() {
+  const btn = document.getElementById("power-toggle-btn");
+  try {
+    const res = await fetchWithTimeout("/api/relay", { cache: "no-store" });
+    if (!res.ok) throw new Error(`fetch failed (${res.status})`);
+    const channels = await res.json();
+    const on = channels[POWER_RELAY_CHANNEL]?.on ?? false;
+    btn.textContent = on ? "Turn Off" : "Turn On";
+    btn.dataset.on = on ? "1" : "0";
+  } catch (err) {
+    btn.textContent = "Unavailable";
+    log(`Power status failed: ${err.message}`, "error");
+  }
+}
+
+function buildPowerCard() {
+  const btn = document.getElementById("power-toggle-btn");
+  btn.addEventListener("click", async () => {
+    const nextOn = btn.dataset.on !== "1";
+    btn.disabled = true;
+    try {
+      await fetchWithTimeout(`/api/relay/${POWER_RELAY_CHANNEL}`, {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ on: nextOn }),
+      });
+      log(`Time Circuits Power: ${nextOn ? "on" : "off"}`);
+    } catch (err) {
+      log(`Power toggle failed: ${err.message}`, "error");
+    } finally {
+      await refreshPowerStatus();
+      btn.disabled = false;
+    }
+  });
+  refreshPowerStatus();
+
+  buildScheduler();
+}
+
+// ---------- Scheduler ----------
+
+const SCHEDULE_DAYS = [
+  { key: "mon", label: "M" },
+  { key: "tue", label: "T" },
+  { key: "wed", label: "W" },
+  { key: "thu", label: "T" },
+  { key: "fri", label: "F" },
+  { key: "sat", label: "S" },
+  { key: "sun", label: "S" },
+];
+
+function daysSummary(days) {
+  const set = new Set(days);
+  if (SCHEDULE_DAYS.every((d) => set.has(d.key))) return "Every day";
+  const weekdays = ["mon", "tue", "wed", "thu", "fri"];
+  const weekend = ["sat", "sun"];
+  if (weekdays.every((d) => set.has(d)) && !weekend.some((d) => set.has(d))) return "Weekdays";
+  if (weekend.every((d) => set.has(d)) && !weekdays.some((d) => set.has(d))) return "Weekends";
+  return SCHEDULE_DAYS.filter((d) => set.has(d.key)).map((d) => d.label).join(" ");
+}
+
+function buildDayPicker() {
+  const container = document.getElementById("schedule-days-input");
+  container.innerHTML = "";
+  for (const day of SCHEDULE_DAYS) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = day.label;
+    btn.dataset.day = day.key;
+    btn.className = "selected"; // every day selected by default
+    btn.addEventListener("click", () => btn.classList.toggle("selected"));
+    container.appendChild(btn);
+  }
+}
+
+function selectedDays() {
+  return [...document.querySelectorAll("#schedule-days-input button.selected")].map((b) => b.dataset.day);
+}
+
+async function refreshScheduleList() {
+  const listEl = document.getElementById("schedule-list");
+  listEl.innerHTML = "";
+  try {
+    const res = await fetchWithTimeout("/api/schedule", { cache: "no-store" });
+    if (!res.ok) throw new Error(`fetch failed (${res.status})`);
+    const entries = await res.json();
+    if (entries.length === 0) {
+      listEl.innerHTML = '<p class="hint">No scheduled times yet.</p>';
+      return;
+    }
+    for (const entry of entries.sort((a, b) => a.time.localeCompare(b.time))) {
+      const row = document.createElement("div");
+      row.className = "schedule-row";
+      row.innerHTML = `
+        <span class="schedule-time">${entry.time}</span>
+        <span class="schedule-summary">${entry.action === "on" ? "Turn On" : "Turn Off"} <span class="schedule-days">&middot; ${daysSummary(entry.days)}</span></span>
+        <input type="checkbox" ${entry.enabled ? "checked" : ""} title="Enabled">
+        <button class="secondary">Delete</button>
+      `;
+      row.querySelector("input").addEventListener("change", async (ev) => {
+        try {
+          await fetchWithTimeout(`/api/schedule/${entry.id}`, {
+            method: "PATCH",
+            cache: "no-store",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: ev.target.checked }),
+          });
+          log(`Schedule ${entry.time} ${entry.action}: ${ev.target.checked ? "enabled" : "disabled"}`);
+        } catch (err) {
+          ev.target.checked = !ev.target.checked;
+          log(`Schedule update failed: ${err.message}`, "error");
+        }
+      });
+      row.querySelector("button").addEventListener("click", async () => {
+        try {
+          await fetchWithTimeout(`/api/schedule/${entry.id}`, { method: "DELETE", cache: "no-store" });
+          log(`Schedule entry removed: ${entry.time} ${entry.action}`);
+          await refreshScheduleList();
+        } catch (err) {
+          log(`Schedule delete failed: ${err.message}`, "error");
+        }
+      });
+      listEl.appendChild(row);
+    }
+  } catch (err) {
+    listEl.innerHTML = `<p class="hint">Schedule unavailable: ${err.message}</p>`;
+  }
+}
+
+function buildScheduler() {
+  buildDayPicker();
+  refreshScheduleList();
+
+  document.getElementById("schedule-add-btn").addEventListener("click", async () => {
+    const days = selectedDays();
+    const time = document.getElementById("schedule-time-input").value;
+    const action = document.getElementById("schedule-action-input").value;
+    if (days.length === 0) {
+      log("Pick at least one day for the schedule entry", "error");
+      return;
+    }
+    if (!time) {
+      log("Pick a time for the schedule entry", "error");
+      return;
+    }
+    try {
+      await fetchWithTimeout("/api/schedule", {
+        method: "POST",
+        cache: "no-store",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days, time, action }),
+      });
+      log(`Schedule added: ${time} ${action}`);
+      await refreshScheduleList();
+    } catch (err) {
+      log(`Schedule add failed: ${err.message}`, "error");
+    }
+  });
+}
+
 // ---------- Settings ----------
 
 function buildSettingsCard() {
@@ -791,9 +963,72 @@ document.getElementById("raw-write-btn").addEventListener("click", async () => {
   }
 });
 
+// ---------- Current display times (read-only status) ----------
+
+const CURRENT_TIME_ELEMENTS = {
+  0x2000: "current-time-destination",
+  0x2001: "current-time-present",
+  0x2002: "current-time-lastdeparted",
+};
+
+async function readDateTimeRecord(index) {
+  const entry = OD.entries.find((e) => e.index === index);
+  const values = {};
+  for (const f of entry.fields) {
+    values[f.name] = await apiRead(index, f.subindex);
+  }
+  return values;
+}
+
+function formatDateTimeRecord(v) {
+  const mm = String(v.month).padStart(2, "0");
+  const dd = String(v.day).padStart(2, "0");
+  const hh = String(v.hour).padStart(2, "0");
+  const min = String(v.minute).padStart(2, "0");
+  return `${mm}/${dd}/${v.year} ${hh}:${min} ${v.meridian === 1 ? "AM" : "PM"}`;
+}
+
+async function refreshCurrentTimes() {
+  if (!OD) return;
+  for (const [index, elId] of Object.entries(CURRENT_TIME_ELEMENTS)) {
+    const el = document.getElementById(elId);
+    if (!el) continue;
+    try {
+      el.textContent = formatDateTimeRecord(await readDateTimeRecord(Number(index)));
+    } catch (err) {
+      el.textContent = "unavailable";
+    }
+  }
+}
+
+// ---------- Tabs ----------
+
+const TAB_STORAGE_KEY = "tc-active-tab";
+
+function initTabs() {
+  const tabButtons = [...document.querySelectorAll(".tab-btn")];
+  const panels = [...document.querySelectorAll(".tab-panel")];
+  const validTabs = tabButtons.map((btn) => btn.dataset.tab);
+
+  function activate(tab) {
+    if (!validTabs.includes(tab)) tab = validTabs[0];
+    for (const btn of tabButtons) btn.classList.toggle("active", btn.dataset.tab === tab);
+    for (const panel of panels) panel.classList.toggle("active", panel.dataset.tab === tab);
+    localStorage.setItem(TAB_STORAGE_KEY, tab);
+  }
+
+  for (const btn of tabButtons) {
+    btn.addEventListener("click", () => activate(btn.dataset.tab));
+  }
+
+  activate(localStorage.getItem(TAB_STORAGE_KEY) || validTabs[0]);
+}
+
 // ---------- Init ----------
 
 async function init() {
+  initTabs();
+
   await refreshHealth();
   setInterval(refreshHealth, 5000);
 
@@ -803,7 +1038,11 @@ async function init() {
   buildDateTimeCards();
   buildFunctionControlButtons();
   buildSettingsCard();
+  buildPowerCard();
   connectLiveSocket();
+
+  refreshCurrentTimes();
+  setInterval(refreshCurrentTimes, 10000);
 }
 
 init();

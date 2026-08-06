@@ -7,85 +7,135 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="topbar">
-  <h1>Time Circuits Control Panel</h1>
-  <div class="conn" id="conn">
-    <span class="dot" id="conn-dot"></span>
-    <span id="conn-text">connecting&hellip;</span>
-    <button id="reconnect-btn">Reconnect</button>
-  </div>
-</header>
+<div class="sticky-header">
+  <header class="topbar">
+    <h1>Time Circuits Control Panel</h1>
+    <div class="conn" id="conn">
+      <span class="dot" id="conn-dot"></span>
+      <span id="conn-text">connecting&hellip;</span>
+      <button id="reconnect-btn">Reconnect</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab-btn" data-tab="status">Status</button>
+    <button class="tab-btn" data-tab="controls">Controls</button>
+    <button class="tab-btn" data-tab="schedule">Schedule</button>
+    <button class="tab-btn" data-tab="settings">Settings</button>
+  </nav>
+</div>
 
 <main>
 
-  <section class="card" id="status-card">
-    <h2>Live Status</h2>
-    <div class="status-row">
-      <div class="state-display" id="state-display">&mdash;</div>
-      <div class="switches" id="switches">
-        <div class="switch" data-name="glitch"><span class="dot"></span>Glitch</div>
-        <div class="switch" data-name="keypadEnter"><span class="dot"></span>Keypad Enter</div>
-        <div class="switch" data-name="mute"><span class="dot"></span>Mute</div>
-        <div class="switch" data-name="timeTravel"><span class="dot"></span>Time Travel</div>
+  <div class="tab-panel" data-tab="status">
+    <section class="card" id="status-card">
+      <h2>Live Status</h2>
+      <div class="status-row">
+        <div class="state-display" id="state-display">&mdash;</div>
+        <div class="switches" id="switches">
+          <div class="switch" data-name="glitch"><span class="dot"></span>Glitch</div>
+          <div class="switch" data-name="keypadEnter"><span class="dot"></span>Keypad Enter</div>
+          <div class="switch" data-name="mute"><span class="dot"></span>Mute</div>
+          <div class="switch" data-name="timeTravel"><span class="dot"></span>Time Travel</div>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <section class="card" id="state-control-card">
-    <h2>Time Circuits State</h2>
-    <p class="hint">Requests are one-shot: the firmware validates and clears the request bit automatically. Armed requires a valid destination date; Travel requires Armed.</p>
-    <div class="button-row">
-      <button data-state="0">Idle</button>
-      <button data-state="1">Armed</button>
-      <button data-state="2">Travel</button>
-      <button data-state="3">Complete</button>
-    </div>
-  </section>
+    <section class="card" id="current-times-card">
+      <h2>Current Display Times</h2>
+      <p class="hint">What's currently shown on each physical display.</p>
+      <div class="settings-group">
+        <div class="toggle-row"><span>Destination Time</span><span class="digital-readout" id="current-time-destination">&mdash;</span></div>
+        <div class="toggle-row"><span>Present Time</span><span class="digital-readout" id="current-time-present">&mdash;</span></div>
+        <div class="toggle-row"><span>Last Time Departed</span><span class="digital-readout" id="current-time-lastdeparted">&mdash;</span></div>
+      </div>
+    </section>
+  </div>
 
-  <section class="datetime-grid" id="quick-actions-grid">
-    <div class="card" id="movie-dates-card">
-      <h2>Movie-Accurate Defaults</h2>
-      <p class="hint">Resets destination, present, and last-departed time to movie-accurate dates.</p>
+  <div class="tab-panel" data-tab="controls">
+    <section class="card" id="power-card">
+      <h2>Power</h2>
+      <p class="hint">Controls power to the Time Circuits hardware.</p>
+      <button id="power-toggle-btn">&mdash;</button>
+    </section>
+
+    <section class="card" id="state-control-card">
+      <h2>Time Circuits State</h2>
+      <p class="hint">Requests are one-shot: the firmware validates and clears the request bit automatically. Armed requires a valid destination date; Travel requires Armed.</p>
       <div class="button-row">
-        <button id="movie-dates-btn">Update</button>
+        <button data-state="0">Idle</button>
+        <button data-state="1">Armed</button>
+        <button data-state="2">Travel</button>
+        <button data-state="3">Complete</button>
       </div>
-      <div class="hint" id="movie-dates-status" style="margin-top: 0.5rem;"></div>
-    </div>
+    </section>
 
-    <div class="card" id="randomiser-card">
-      <h2>Randomiser</h2>
-      <p class="hint">Sets the destination time to a random moment from history.</p>
-      <div class="button-row">
-        <button id="randomiser-btn">Update</button>
+    <section class="datetime-grid" id="quick-actions-grid">
+      <div class="card" id="movie-dates-card">
+        <h2>Movie-Accurate Defaults</h2>
+        <p class="hint">Resets destination, present, and last-departed time to movie-accurate dates.</p>
+        <div class="button-row">
+          <button id="movie-dates-btn">Update</button>
+        </div>
+        <div class="hint" id="movie-dates-status" style="margin-top: 0.5rem;"></div>
       </div>
-      <div class="hint" id="randomiser-status" style="margin-top: 0.5rem;"></div>
-    </div>
-  </section>
 
-  <section class="datetime-grid" id="datetime-grid"></section>
+      <div class="card" id="randomiser-card">
+        <h2>Randomiser</h2>
+        <p class="hint">Sets the destination time to a random moment from history.</p>
+        <div class="button-row">
+          <button id="randomiser-btn">Update</button>
+        </div>
+        <div class="hint" id="randomiser-status" style="margin-top: 0.5rem;"></div>
+      </div>
+    </section>
 
-  <section class="card" id="function-control-card">
-    <h2>Function Control</h2>
-    <p class="hint">One-shot actions. Each button sets a bit that the firmware acts on and clears automatically.</p>
-    <div class="settings-group" id="function-control-buttons"></div>
-  </section>
+    <section class="datetime-grid" id="datetime-grid"></section>
 
-  <section class="card" id="settings-card">
-    <h2>Settings</h2>
-    <div class="settings-body" id="settings-body"></div>
-  </section>
+    <section class="card" id="function-control-card">
+      <h2>Function Control</h2>
+      <p class="hint">One-shot actions. Each button sets a bit that the firmware acts on and clears automatically.</p>
+      <div class="settings-group" id="function-control-buttons"></div>
+    </section>
+  </div>
 
-  <section class="card" id="advanced-card">
-    <h2>Advanced: Raw OD Access</h2>
-    <div class="raw-form">
-      <label>Index <input id="raw-index" type="text" placeholder="0x2300" size="8"></label>
-      <label>Subindex <input id="raw-subindex" type="number" value="0" min="0" max="255" size="4"></label>
-      <label>Value <input id="raw-value" type="text" placeholder="(for write)" size="10"></label>
-      <button id="raw-read-btn">Read</button>
-      <button id="raw-write-btn">Write</button>
-    </div>
-    <pre id="log"></pre>
-  </section>
+  <div class="tab-panel" data-tab="schedule">
+    <section class="card" id="schedule-card">
+      <h2>Power Schedule</h2>
+      <p class="hint">Automatically turns the Time Circuits power on or off at scheduled times, using this server's own clock.</p>
+      <div id="schedule-list"></div>
+      <div class="schedule-form">
+        <div class="day-picker" id="schedule-days-input"></div>
+        <label>Time <input type="time" id="schedule-time-input" value="08:00"></label>
+        <label>Action
+          <select id="schedule-action-input">
+            <option value="on">Turn On</option>
+            <option value="off">Turn Off</option>
+          </select>
+        </label>
+        <button id="schedule-add-btn">Add</button>
+      </div>
+    </section>
+  </div>
+
+  <div class="tab-panel" data-tab="settings">
+    <section class="card" id="settings-card">
+      <h2>Settings</h2>
+      <div class="settings-body" id="settings-body"></div>
+    </section>
+
+    <section class="card" id="advanced-card">
+      <h2>Advanced: Raw OD Access</h2>
+      <div class="raw-form">
+        <label>Index <input id="raw-index" type="text" placeholder="0x2300" size="8"></label>
+        <label>Subindex <input id="raw-subindex" type="number" value="0" min="0" max="255" size="4"></label>
+        <label>Value <input id="raw-value" type="text" placeholder="(for write)" size="10"></label>
+        <button id="raw-read-btn">Read</button>
+        <button id="raw-write-btn">Write</button>
+      </div>
+      <pre id="log"></pre>
+    </section>
+  </div>
 
 </main>
 
