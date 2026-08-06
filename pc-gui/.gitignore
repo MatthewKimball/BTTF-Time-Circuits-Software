@@ -1,3 +1,7 @@
 backend/.venv/
 __pycache__/
 *.pyc
+
+# Runtime state, not project data - unlike movie_dates.json/
+# historical_dates.json, this changes via the GUI/API, not manual editing.
+backend/power_schedule.json
