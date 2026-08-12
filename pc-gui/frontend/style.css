@@ -10,11 +10,25 @@
 }
 
 /* Microgramma D Extended Bold - commercially licensed, self-hosted locally
-   (not committed anywhere public). Used for all UI text. */
+   (not committed anywhere public, see fonts/README.md). Used only where the
+   physical hardware itself carries this look: the title bar and the
+   "Current Display Times" row labels (.bttf-row-label) - see .bttf-label
+   further down for the digit-readout nameplate labels, same idea. */
 @font-face {
   font-family: "Microgramma Bold Extended";
   src: url("fonts/MicrogrammaDExtended-Bold.woff2") format("woff2");
   font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Inter (SIL OFL 1.1, see fonts/Inter-LICENSE.txt) - free to self-host and
+   commit, unlike Microgramma. Handles everything else: headings, hints,
+   buttons, forms. */
+@font-face {
+  font-family: "Inter";
+  src: url("fonts/Inter.woff2") format("woff2");
+  font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
@@ -55,16 +69,16 @@
 
 body {
   margin: 0;
-  font-family: "Microgramma Bold Extended", "Eurostile", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--text);
 }
 
-/* Headings/subheadings stay all-caps; everything under them (hints,
-   labels, buttons, form controls) keeps its natural case. */
-h1, h2 {
-  text-transform: uppercase;
-}
+/* The title bar is the one heading that keeps the hardware-nameplate look;
+   section headings (.card h2) use the general UI font like everything
+   else under them - see .bttf-row-label/.bttf-label for the other two
+   places Microgramma still appears. (Full rule, with font-size etc., is
+   further down with the rest of .topbar.) */
 
 .sticky-header {
   position: sticky;
@@ -112,6 +126,8 @@ h1, h2 {
 }
 
 .topbar h1 {
+  font-family: "Microgramma Bold Extended", "Eurostile", sans-serif;
+  text-transform: uppercase;
   font-size: 1.15rem;
   margin: 0;
   letter-spacing: 0.02em;
@@ -294,6 +310,15 @@ input, select {
   justify-content: space-between;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+/* "Destination Time"/"Present Time"/"Last Time Departed" - matches the
+   nameplate look of .bttf-label below, since these name the same physical
+   displays the readout is showing. */
+.bttf-row-label {
+  font-family: "Microgramma Bold Extended", "Eurostile", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .numeric-row {
