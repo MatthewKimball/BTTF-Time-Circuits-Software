@@ -594,6 +594,7 @@ const POWER_RELAY_CHANNEL = 1;
 
 async function refreshPowerStatus() {
   const btn = document.getElementById("power-toggle-btn");
+  const statusDot = document.getElementById("power-status");
   try {
     const res = await fetchWithTimeout("/api/relay", { cache: "no-store" });
     if (!res.ok) throw new Error(`fetch failed (${res.status})`);
@@ -601,8 +602,10 @@ async function refreshPowerStatus() {
     const on = channels[POWER_RELAY_CHANNEL]?.on ?? false;
     btn.textContent = on ? "Turn Off" : "Turn On";
     btn.dataset.on = on ? "1" : "0";
+    statusDot?.classList.toggle("on", on);
   } catch (err) {
     btn.textContent = "Unavailable";
+    statusDot?.classList.remove("on");
     log(`Power status failed: ${err.message}`, "error");
   }
 }
@@ -1070,6 +1073,11 @@ async function init() {
 
   refreshCurrentTimes();
   setInterval(refreshCurrentTimes, 10000);
+
+  // Keeps the Status page's power indicator current even if this tab is
+  // never the one visited - e.g. the schedule turning the relay on/off in
+  // the background, or another browser tab/device toggling it.
+  setInterval(refreshPowerStatus, 10000);
 }
 
 init();

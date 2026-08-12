@@ -245,6 +245,14 @@ main {
 .switch.on .dot { background: var(--green); }
 .switch.on { color: var(--text); }
 
+/* Mains power to the whole board, from the Pi's relay - a different kind
+   of "on" than the CANopen button switches next to it, so it gets a
+   divider to read as its own thing. */
+.power-status {
+  padding-right: 1.1rem;
+  border-right: 1px solid var(--border);
+}
+
 .button-row {
   display: flex;
   gap: 0.6rem;
