@@ -980,12 +980,39 @@ async function readDateTimeRecord(index) {
   return values;
 }
 
+// Same 3-letter abbreviations as monthDisplayChars[] in
+// App/Time_Circuits/datetime_display.c, so the month column matches what
+// the physical segment display actually shows.
+const MONTH_ABBR = [
+  "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+];
+
+function bttfColumn(label, value) {
+  return `<div class="bttf-col"><span class="bttf-label">${label}</span><span class="bttf-value">${value}</span></div>`;
+}
+
+// Renders a date/time record in the same layout as the physical Time
+// Circuits display: MONTH/DAY/YEAR columns, an AM/PM indicator-lamp pair,
+// then HOUR : MINUTE.
 function formatDateTimeRecord(v) {
-  const mm = String(v.month).padStart(2, "0");
+  const month = MONTH_ABBR[v.month - 1] ?? "---";
   const dd = String(v.day).padStart(2, "0");
   const hh = String(v.hour).padStart(2, "0");
   const min = String(v.minute).padStart(2, "0");
-  return `${mm}/${dd}/${v.year} ${hh}:${min} ${v.meridian === 1 ? "AM" : "PM"}`;
+  const isAm = v.meridian === 1;
+  return `<div class="bttf-readout">`
+    + bttfColumn("Month", month)
+    + bttfColumn("Day", dd)
+    + bttfColumn("Year", v.year)
+    + `<div class="bttf-meridian">`
+    + `<div class="bttf-meridian-item"><span class="bttf-label">AM</span><span class="bttf-indicator${isAm ? " on" : ""}"></span></div>`
+    + `<div class="bttf-meridian-item"><span class="bttf-label">PM</span><span class="bttf-indicator${isAm ? "" : " on"}"></span></div>`
+    + `</div>`
+    + `<span class="bttf-value bttf-hour">${hh}</span>`
+    + `<span class="bttf-value bttf-colon">:</span>`
+    + `<span class="bttf-value bttf-minute">${min}</span>`
+    + `</div>`;
 }
 
 async function refreshCurrentTimes() {
@@ -994,7 +1021,7 @@ async function refreshCurrentTimes() {
     const el = document.getElementById(elId);
     if (!el) continue;
     try {
-      el.textContent = formatDateTimeRecord(await readDateTimeRecord(Number(index)));
+      el.innerHTML = formatDateTimeRecord(await readDateTimeRecord(Number(index)));
     } catch (err) {
       el.textContent = "unavailable";
     }

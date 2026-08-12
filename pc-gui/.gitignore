@@ -5,3 +5,9 @@ __pycache__/
 # Runtime state, not project data - unlike movie_dates.json/
 # historical_dates.json, this changes via the GUI/API, not manual editing.
 backend/power_schedule.json
+
+# Microgramma Bold Extended is a commercial font (Linotype/Monotype), not
+# freely redistributable like DSEG14 (SIL OFL). Keep the converted webfont
+# out of this public repo - deploy it to the Pi directly instead of via git.
+# See frontend/fonts/README.md.
+frontend/fonts/MicrogrammaDExtended-Bold.woff2
