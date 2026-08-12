@@ -1009,9 +1009,9 @@ function formatDateTimeRecord(v) {
     + `<div class="bttf-meridian-item"><span class="bttf-label">AM</span><span class="bttf-indicator${isAm ? " on" : ""}"></span></div>`
     + `<div class="bttf-meridian-item"><span class="bttf-label">PM</span><span class="bttf-indicator${isAm ? "" : " on"}"></span></div>`
     + `</div>`
-    + `<span class="bttf-value bttf-hour">${hh}</span>`
+    + bttfColumn("Hour", hh)
     + `<span class="bttf-value bttf-colon">:</span>`
-    + `<span class="bttf-value bttf-minute">${min}</span>`
+    + bttfColumn("Min", min)
     + `</div>`;
 }
 
