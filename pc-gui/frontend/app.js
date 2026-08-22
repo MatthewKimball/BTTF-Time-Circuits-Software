@@ -494,28 +494,57 @@ async function syncPresentTimeToReal(fieldsEl, statusEl, button, tz) {
   realTimeSyncArmedButton = button;
   button.dataset.idleLabel = button.textContent;
   button.textContent = "Cancel Sync";
-  statusEl.textContent = "Waiting for :00…";
+  statusEl.textContent = "Checking server clock…";
 
   try {
-    // Wait until roughly the top of a minute using the browser's own RAW,
-    // uncorrected clock - purely as a rough scheduling signal for WHEN to
-    // do the real fetch below, never as a value we actually write. This is
-    // deliberately NOT "fetch once, then trust an extrapolated offset for
-    // up to 60s while waiting for :00": if the tab gets throttled in the
-    // background, or the machine sleeps, during that wait, an extrapolated
-    // offset goes stale and silently writes the wrong time - which is
-    // exactly the class of bug that caused this to be 18-30 minutes off
-    // for real users. Waiting on the raw local clock is fine here because
-    // we only care about its EDGE (seconds wrapping to 0), not its value.
+    // Wait until roughly the top of a minute - calibrated against the
+    // SERVER's own clock, not this device's. An earlier version waited
+    // for THIS device's local clock to hit :00, which is fine for a
+    // device with an accurate clock, but a real phone was confirmed
+    // (2026-08-22) running ~2s fast: it fired its local :00 trigger while
+    // the server's clock was still 2s into the previous minute, silently
+    // writing a value one minute behind what the phone's own (fast) clock
+    // showed a moment later. A laptop synced at the same time, with an
+    // accurate clock, showed no such gap. Calibrating the wait duration
+    // against one cheap initial fetch of the server's clock - then using
+    // the device's clock only to measure the RELATIVE/monotonic elapsed
+    // time via performance.now(), never its absolute reading - makes this
+    // immune to however wrong a given device's own clock is.
+    statusEl.textContent = "Waiting for :00… (calibrating to server clock)";
+    const calibrationStartedAt = performance.now();
+    const calibration = await fetchTimeParts(tz);
+    const calibrationRoundTripMs = performance.now() - calibrationStartedAt;
+    log(
+      `Real-time sync calibration: requested tz=${tz}, server reported second=${calibration.second} `
+      + `(round trip ${calibrationRoundTripMs.toFixed(0)}ms)`
+    );
+
+    // The server's stated second value was true roughly half the round
+    // trip ago, assuming roughly symmetric request/response latency.
+    // "% 60" folds second=0 (we're already basically at a boundary) down
+    // to a 0ms wait instead of a full extra minute.
+    const secondsUntilBoundary = (60 - calibration.second) % 60;
+    const msUntilBoundary = secondsUntilBoundary * 1000 - calibrationRoundTripMs / 2;
+    const targetMonotonicMs = performance.now() + Math.max(0, msUntilBoundary);
+
+    // This is deliberately NOT "fetch once, then trust an extrapolated
+    // offset for up to 60s while waiting": if the tab gets throttled in
+    // the background, or the machine sleeps, during that wait, an
+    // extrapolated offset goes stale and silently writes the wrong time -
+    // which is exactly the class of bug that caused this to be 18-30
+    // minutes off for real users. Here, a throttled/late-firing wait just
+    // means the final fetch below (the one actually used) happens later
+    // than intended, still with a fresh, correct value - never a stale
+    // extrapolation.
     await new Promise((resolve, reject) => {
       const poll = () => {
         if (!realTimeSyncActive) {
           reject(new Error("cancelled"));
           return;
         }
-        const secondsLeft = 60 - new Date().getSeconds();
-        statusEl.textContent = `Waiting for :00… (~${secondsLeft === 60 ? 0 : secondsLeft}s, rough local estimate)`;
-        if (new Date().getSeconds() === 0) {
+        const remainingMs = targetMonotonicMs - performance.now();
+        statusEl.textContent = `Waiting for :00… (~${Math.max(0, Math.round(remainingMs / 1000))}s, calibrated to server clock)`;
+        if (remainingMs <= 0) {
           resolve();
           return;
         }
@@ -525,7 +554,7 @@ async function syncPresentTimeToReal(fieldsEl, statusEl, button, tz) {
     });
 
     // NOW do the one authoritative, freshly-fetched lookup - right at the
-    // trigger moment, not up to a minute earlier.
+    // (server-calibrated) trigger moment, not up to a minute earlier.
     const target = await fetchPlausibleTimeParts(tz, statusEl);
 
     const { hour, meridian } = to12Hour(target.hour);
