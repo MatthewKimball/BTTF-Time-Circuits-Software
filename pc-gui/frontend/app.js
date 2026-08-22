@@ -301,7 +301,7 @@ function buildDateTimeCards() {
         </div>`;
       const syncBtn = document.createElement("button");
       syncBtn.textContent = "Sync";
-      syncBtn.title = "Fetch the current time for the selected timezone and apply it exactly on the next :00 mark";
+      syncBtn.title = "Fetch the current time for the selected timezone and apply it right at the next :00 mark";
       syncGroup.appendChild(syncBtn);
       card.appendChild(syncGroup);
 
@@ -310,7 +310,7 @@ function buildDateTimeCards() {
       localGroup.innerHTML = `<h3>Sync to My Timezone</h3>`;
       const detectBtn = document.createElement("button");
       detectBtn.textContent = "Sync";
-      detectBtn.title = "Detect this browser's local timezone and sync to it exactly on the next :00 mark";
+      detectBtn.title = "Detect this browser's local timezone and sync to it right at the next :00 mark";
       localGroup.appendChild(detectBtn);
       card.appendChild(localGroup);
 
@@ -401,6 +401,45 @@ function to12Hour(hour24) {
   let hour12 = hour24 % 12;
   if (hour12 === 0) hour12 = 12;
   return { hour: hour12, meridian };
+}
+
+function daysInMonth(month, year) {
+  const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const lengths = [31, isLeap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return lengths[month - 1];
+}
+
+// Predicts the upcoming minute from a freshly-fetched (year, month, day,
+// hour24, minute), rolling hour/day/month/year over as needed. Used to
+// compensate for the round-trip + firmware processing time between the
+// fetch below and the moment the write actually reaches the physical
+// display (measured at ~1s): the fetch now deliberately happens at :59,
+// one second before the real minute boundary, so it reads back the
+// CURRENT (about-to-expire) minute - this predicts what real time will be
+// by the time the write lands, instead of writing an already-stale value.
+// Plain integer arithmetic on the already-correctly-zoned fields, not a
+// Date object - see fetchTimeParts() above for why: a Date's
+// getHours()/getMinutes() re-interpret in the browser's own local zone,
+// not the target zone, which was the earlier (real, but distinct) bug.
+function addOneMinute({ year, month, day, hour, minute }) {
+  minute += 1;
+  if (minute >= 60) {
+    minute = 0;
+    hour += 1;
+    if (hour >= 24) {
+      hour = 0;
+      day += 1;
+      if (day > daysInMonth(month, year)) {
+        day = 1;
+        month += 1;
+        if (month > 12) {
+          month = 1;
+          year += 1;
+        }
+      }
+    }
+  }
+  return { year, month, day, hour, minute };
 }
 
 // Fetches the current time for a zone and parses the response's OWN
@@ -494,28 +533,36 @@ async function syncPresentTimeToReal(fieldsEl, statusEl, button, tz) {
   realTimeSyncArmedButton = button;
   button.dataset.idleLabel = button.textContent;
   button.textContent = "Cancel Sync";
-  statusEl.textContent = "Waiting for :00…";
+  statusEl.textContent = "Waiting for :59…";
 
   try {
-    // Wait until roughly the top of a minute using the browser's own RAW,
-    // uncorrected clock - purely as a rough scheduling signal for WHEN to
-    // do the real fetch below, never as a value we actually write. This is
-    // deliberately NOT "fetch once, then trust an extrapolated offset for
-    // up to 60s while waiting for :00": if the tab gets throttled in the
-    // background, or the machine sleeps, during that wait, an extrapolated
-    // offset goes stale and silently writes the wrong time - which is
-    // exactly the class of bug that caused this to be 18-30 minutes off
-    // for real users. Waiting on the raw local clock is fine here because
-    // we only care about its EDGE (seconds wrapping to 0), not its value.
+    // Wait until one second before the top of a minute (:59), using the
+    // browser's own RAW, uncorrected clock - purely as a rough scheduling
+    // signal for WHEN to do the real fetch below, never as a value we
+    // actually write. This is deliberately NOT "fetch once, then trust an
+    // extrapolated offset for up to 60s while waiting": if the tab gets
+    // throttled in the background, or the machine sleeps, during that
+    // wait, an extrapolated offset goes stale and silently writes the
+    // wrong time - which is exactly the class of bug that caused this to
+    // be 18-30 minutes off for real users. Waiting on the raw local clock
+    // is fine here because we only care about its EDGE (seconds hitting
+    // 59), not its value.
+    //
+    // Triggering at :59 rather than :00 - and predicting the upcoming
+    // minute below via addOneMinute() - compensates for the ~1s of
+    // round-trip + firmware processing time measured between this fetch
+    // and the moment the write actually reaches the physical display, so
+    // that 1s lands the visible update right at the real boundary instead
+    // of a second after it.
     await new Promise((resolve, reject) => {
       const poll = () => {
         if (!realTimeSyncActive) {
           reject(new Error("cancelled"));
           return;
         }
-        const secondsLeft = 60 - new Date().getSeconds();
-        statusEl.textContent = `Waiting for :00… (~${secondsLeft === 60 ? 0 : secondsLeft}s, rough local estimate)`;
-        if (new Date().getSeconds() === 0) {
+        const secondsLeft = 59 - new Date().getSeconds();
+        statusEl.textContent = `Waiting for :59… (~${secondsLeft}s, rough local estimate)`;
+        if (new Date().getSeconds() === 59) {
           resolve();
           return;
         }
@@ -525,8 +572,10 @@ async function syncPresentTimeToReal(fieldsEl, statusEl, button, tz) {
     });
 
     // NOW do the one authoritative, freshly-fetched lookup - right at the
-    // trigger moment, not up to a minute earlier.
-    const target = await fetchPlausibleTimeParts(tz, statusEl);
+    // trigger moment, not up to a minute earlier. This reads back the
+    // CURRENT (about-to-expire) minute, since we're one second early.
+    const fetched = await fetchPlausibleTimeParts(tz, statusEl);
+    const target = addOneMinute(fetched);
 
     const { hour, meridian } = to12Hour(target.hour);
     const fields = {
@@ -550,7 +599,11 @@ async function syncPresentTimeToReal(fieldsEl, statusEl, button, tz) {
     const targetStr = `${String(target.month).padStart(2, "0")}/${String(target.day).padStart(2, "0")}/${target.year} `
       + `${String(hour).padStart(2, "0")}:${String(target.minute).padStart(2, "0")} ${meridian === 1 ? "AM" : "PM"} (${tz})`;
     statusEl.textContent = `Synced to ${targetStr}.`;
-    log(`Present time synced to real time: ${targetStr}`);
+    log(
+      `Present time synced to real time: ${targetStr} `
+      + `(fetched ${String(fetched.hour).padStart(2, "0")}:${String(fetched.minute).padStart(2, "0")}:${String(fetched.second).padStart(2, "0")} `
+      + `at :59, predicted +1 minute for the write/display delay)`
+    );
   } catch (err) {
     if (err.message !== "cancelled") {
       statusEl.textContent = `Sync failed: ${err.message}`;
