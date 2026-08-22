@@ -24,6 +24,7 @@ Config via environment variables:
 import asyncio
 import json
 import os
+import threading
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -66,6 +67,28 @@ async def no_cache(request, call_next):
 _bus: can.BusABC | None = None
 _sdo: CanopenSdoClient | None = None
 _connect_error: str | None = None
+
+# Guards every actual SDO transaction against the shared CAN connection.
+# Confirmed live (2026-08-22) that without this, concurrent access from
+# the live-status WebSocket's polling loop, the health monitor, and a
+# request handler could collide on the same underlying SocketCAN socket
+# closely enough to overflow its kernel transmit queue ("No buffer space
+# available"), failing whichever request lost the race. A real
+# threading.Lock, not asyncio.Lock: /api/read and /api/write are plain
+# `def` endpoints, which FastAPI/Starlette runs in a worker thread pool,
+# not on the asyncio event loop, so an asyncio.Lock wouldn't actually
+# synchronize against those threads.
+_sdo_lock = threading.Lock()
+
+
+def _locked_read(index: int, subindex: int, size_hint: int | None = None) -> int:
+    with _sdo_lock:
+        return _sdo.read(index, subindex, size_hint=size_hint)
+
+
+def _locked_write(index: int, subindex: int, value: int, size: int) -> None:
+    with _sdo_lock:
+        _sdo.write(index, subindex, value, size)
 
 
 def _connect():
@@ -112,7 +135,7 @@ async def _health_monitor_loop():
             if _sdo is None:
                 _connect()
             if _sdo is not None:
-                await asyncio.to_thread(_sdo.read, 0x2100, 0)  # cheap 1-byte read
+                await asyncio.to_thread(_locked_read, 0x2100, 0)  # cheap 1-byte read
                 status_leds.set_can_link(True)
             else:
                 status_leds.set_can_link(False)
@@ -279,11 +302,11 @@ def historical_dates():
 
 @app.get("/api/read")
 def read(index: int, subindex: int):
-    sdo = _require_sdo()
+    _require_sdo()
     field_info = find_field(index, subindex)
     size_hint = DTYPE_SIZES[field_info[1].dtype] if field_info else None
     try:
-        value = sdo.read(index, subindex, size_hint=size_hint)
+        value = _locked_read(index, subindex, size_hint=size_hint)
     except SdoTimeout as exc:
         raise HTTPException(status_code=504, detail=str(exc)) from exc
     except SdoAbort as exc:
@@ -299,7 +322,7 @@ class WriteRequest(BaseModel):
 
 @app.post("/api/write")
 def write(req: WriteRequest):
-    sdo = _require_sdo()
+    _require_sdo()
     field_info = find_field(req.index, req.subindex)
     if field_info is None:
         raise HTTPException(status_code=404, detail="Unknown OD entry")
@@ -309,7 +332,7 @@ def write(req: WriteRequest):
 
     size = DTYPE_SIZES[f.dtype]
     try:
-        sdo.write(req.index, req.subindex, req.value, size)
+        _locked_write(req.index, req.subindex, req.value, size)
     except SdoTimeout as exc:
         raise HTTPException(status_code=504, detail=str(exc)) from exc
     except SdoAbort as exc:
@@ -361,7 +384,7 @@ async def live_status(ws: WebSocket):
             if _sdo is not None:
                 for index, subindex in LIVE_POLL_OBJECTS:
                     try:
-                        value = await asyncio.to_thread(_sdo.read, index, subindex)
+                        value = await asyncio.to_thread(_locked_read, index, subindex)
                         payload[f"{index:#06x}:{subindex}"] = value
                     except (SdoTimeout, SdoAbort) as exc:
                         payload[f"{index:#06x}:{subindex}"] = None
