@@ -44,6 +44,10 @@ void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
+  // Diagnostic note (clicking-on-repeated-sounds investigation): tried
+  // dropping this to SPI_BAUDRATEPRESCALER_8 (42MHz -> 10.5MHz) to test
+  // whether SD-card SPI switching noise was coupling into the audio path -
+  // click was unchanged on hardware, ruled out. Restored to /2.
   hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
