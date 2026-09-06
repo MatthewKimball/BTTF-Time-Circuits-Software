@@ -78,6 +78,14 @@ volatile bool gColonPending = false;
 volatile uint32_t gColonRequestTick = 0;
 #define COLON_STALE_MS 500 // one colon blink half-period - older than this, skip it
 
+// Set by StartRtcInitTask once timeCircuit_control_initRTC() returns, success
+// or failure - lets StartMainTask give the RTC a short bounded head start
+// before the displays first light up, so present time doesn't visibly jump
+// right after power-on (see the wait in StartMainTask). Bounded so a
+// hung/missing RTC still can never block boot - see StartRtcInitTask.
+volatile bool gRtcInitDone = false;
+#define RTC_INIT_WAIT_TIMEOUT_MS 500
+
 /* USER CODE END Variables */
 /* Definitions for MainTask */
 osThreadId_t MainTaskHandle;
@@ -201,6 +209,21 @@ void StartMainTask(void *argument)
   // on the IMU being ready immediately, so it's fine for its init to
   // finish a couple seconds into the sound/display sequence instead - the
   // main loop below still only starts once it's done either way.
+  //
+  // Give RtcInitTask a short bounded head start first: a normal DS3231 read
+  // (bus recovery + init) finishes in a handful of ms, but without waiting
+  // at all, playStartupSequence() below usually wins the race and draws the
+  // present display with yesterday's last-saved SD time, which then jumps
+  // to the real time a couple of main-loop ticks later. Capped at
+  // RTC_INIT_WAIT_TIMEOUT_MS so a hung/missing RTC still can never delay
+  // boot beyond that - it just falls through and draws the SD-stored value
+  // as before, same as if this wait wasn't here at all.
+  uint32_t rtcWaitStartTick = HAL_GetTick();
+  while (!gRtcInitDone && (HAL_GetTick() - rtcWaitStartTick) < RTC_INIT_WAIT_TIMEOUT_MS)
+  {
+    osDelay(2);
+  }
+
   timeCircuit_control_playStartupSequence(gTimeCircuitConfig);
 
   imu_bno055_init();
@@ -347,6 +370,11 @@ void StartCANopen(void *argument)
 void StartRtcInitTask(void *argument)
 {
   timeCircuit_control_initRTC(gTimeCircuitConfig);
+
+  // Signal StartMainTask's boot-time wait (see above) that the RTC attempt
+  // is over, whether it succeeded or not - either way there's nothing more
+  // for that wait to usefully wait for.
+  gRtcInitDone = true;
 
   // One-shot - nothing left to do, so just idle forever rather than exit
   // (avoids relying on osThreadExit/OS task cleanup semantics).
